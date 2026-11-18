@@ -14,7 +14,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function get(url, opts = {}, tries = 2) {
   let res;
-  try { res = await fetch(url, opts); }
+  // no-store: never reuse a saved answer, or a new game can stay hidden for minutes
+  try { res = await fetch(url, { cache: 'no-store', ...opts }); }
   catch (e) { throw new SyncError('network', 'blocked'); }
   if (res.status === 429 && tries > 1) { await sleep(2500); return get(url, opts, tries - 1); }
   return res;

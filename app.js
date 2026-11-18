@@ -471,6 +471,7 @@ function syncErrorText(e, p) {
 async function syncProfile({ full = false, onProgress } = {}) {
   const p = st.p;
   if (!p || st.syncing) return null;
+  if (!full && !navigator.onLine) { syncNote('Offline'); return null; }
   st.syncing = true; $('sync-btn').classList.add('spin'); syncNote('Syncing…');
   const pid = st.pid, epoch = st.epoch;
   try {
@@ -817,6 +818,7 @@ const gh = {
       const oppClk = g && r.ply > 0 ? g.moves[r.ply - 1].clk : null;
       if (oppClk != null) this.clk[this.me === 'w' ? 'b' : 'w'] = Math.max(15, oppClk);
     } else { this.me = mode; this.book = true; }
+    st.book = C.buildBook(st.games, st.user, st.evals);
     this.chess = new Chess(fen); this.on = true; this.thinking = false; this.fens = [fen]; this.mvs = [];
     $('gh-resign').disabled = false; $('gh-start').textContent = 'New game';
     $('gh-top-name').textContent = `Ghost (about ${this.elo})`; $('gh-bot-name').textContent = st.p ? st.p.name : 'You';
@@ -886,15 +888,19 @@ const gh = {
     const fen = game.fen();
     let uci = this.book && this.plies < 24 ? C.bookMove(st.book, fen) : null;
     if (uci) { try { new Chess(fen).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }); } catch (e) { uci = null; } }
+    const left = this.clk[game.turn()];
     if (!uci) {
+      this.book = false;
+      // Real thinking time: Stockfish's rating levels assume about a second a move, so a short
+      // search plays far below the slider. Keep enough in hand not to flag in fast games.
+      const think = this.useClock ? Math.max(150, Math.min(1500, left * 1000 / 30)) : 1200;
       const legal = game.moves({ verbose: true });
       const slip = this.elo < 1320 ? (1320 - this.elo) / 1320 * 0.45 : 0;
       if (Math.random() < slip) { const x = legal[Math.floor(Math.random() * legal.length)]; uci = x.from + x.to + (x.promotion || ''); }
-      else { const r = await st.engI.play(fen, this.elo, 220); uci = r.best; }
+      else { const r = await st.engI.play(fen, this.elo, think); uci = r.best; }
     }
     if (tok !== this.gtok || this.chess !== game || !this.on) return;
-    const left = this.clk[game.turn()];
-    const want = this.useClock ? Math.min(left / 12, 350 + Math.random() * (left < 20 ? 500 : 1700)) : 350;
+    const want = this.useClock ? Math.min(left * 1000 / 12, 350 + Math.random() * (left < 20 ? 500 : 1700)) : 350;
     await new Promise(r => setTimeout(r, Math.max(0, want - (performance.now() - t0))));
     if (tok !== this.gtok || this.chess !== game || !this.on) return;
     let mv; try { mv = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }); } catch (e) { mv = game.move(game.moves()[0]); }
@@ -1538,3 +1544,28 @@ async function boot() {
   for (const s of stages) s.evalNow();
 }
 boot();
+
+/* ---------- offline + updates ---------- */
+// Registers the service worker that keeps the app on the device, and shows a bar when a new version is ready.
+function showUpdateBar(worker) {
+  const bar = $('update-bar'); if (!bar) return;
+  bar.hidden = false;
+  $('update-go').onclick = () => { $('update-go').disabled = true; worker.postMessage('SKIP_WAITING'); };
+}
+async function initOffline() {
+  if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
+  let reg;
+  try { reg = await navigator.serviceWorker.register('./sw.js'); } catch (e) { return; }   // e.g. inside Claude's preview
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading) return; reloading = true; location.reload(); });
+  const watch = w => w && w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdateBar(w); });
+  if (reg.waiting && navigator.serviceWorker.controller) showUpdateBar(reg.waiting);
+  watch(reg.installing);
+  reg.addEventListener('updatefound', () => watch(reg.installing));
+  const check = () => { if (navigator.onLine) reg.update().catch(() => {}); };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+  setInterval(check, 30 * 60 * 1000);
+}
+window.addEventListener('online', () => { syncNote(''); if (st.p) syncProfile().catch(() => {}); });
+window.addEventListener('offline', () => syncNote('Offline'));
+initOffline();

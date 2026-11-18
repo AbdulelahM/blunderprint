@@ -448,14 +448,18 @@ export function signature(S) {
 
 /* ---------- Opponent book for the ghost ---------- */
 
-export function buildBook(games, user) {
+// Opening moves the user's real opponents played. With analysis available, moves that lost
+// 5+ points of win chance are left out, so the ghost copies openings but not blunders.
+export function buildBook(games, user, evals = {}) {
   const book = {};
   for (const g of games) {
     const col = userColor(g, user);
     if (!col) continue;
-    for (let i = 0; i < Math.min(g.moves.length, 24); i++) {
+    const ev = evals[g.id];
+    for (let i = 0; i < Math.min(g.moves.length, ev ? 24 : 10); i++) {
       const m = g.moves[i];
       if (m.color === col) continue;
+      if (ev && ev[i] && ev[i + 1] && m.uci !== ev[i].best && winPct(ev[i]) - (100 - winPct(ev[i + 1])) >= 5) continue;
       const key = g.fens[i].split(' ').slice(0, 4).join(' ');
       (book[key] = book[key] || {})[m.uci] = (book[key][m.uci] || 0) + 1;
     }

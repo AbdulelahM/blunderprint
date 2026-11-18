@@ -2,8 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#302e2b">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Blunderprint">
 <title>Blunderprint</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -35,7 +42,9 @@ body { background: var(--sheet); color: var(--ink); font-family: var(--body); fo
 a { color: var(--line); }
 button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--line); outline-offset: 2px; }
-.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px 64px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-right)) calc(64px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+header.top { padding-top: calc(14px + env(safe-area-inset-top)) !important; }
+.updatebar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 100; background: #f3f2f0; color: #262522; border-radius: 12px; padding: 10px 10px 10px 16px; display: flex; gap: 12px; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,.5); font-weight: 800; font-size: 14px; max-width: calc(100% - 32px); }
 p { margin: 0; }
 h1 { font-weight: 900; font-size: clamp(26px, 4vw, 36px); line-height: 1.12; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
 h1 em { font-style: normal; color: var(--blunder); }
@@ -530,6 +539,7 @@ https://github.com/shaack/cm-chessboard
     </nav>
   </header>
   <div class="alert" id="alert" hidden></div>
+  <div class="updatebar" id="update-bar" hidden role="status"><span>New version ready</span><button class="btn primary" id="update-go" type="button">Reload</button></div>
   <div class="progress" id="progress" hidden>
     <span id="progress-text">Analysing</span>
     <div class="track"><div class="fill" id="progress-fill"></div></div>

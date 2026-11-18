@@ -25,7 +25,8 @@ export function parseGame(str) {
     if (m) h[m[1]] = m[2]; else if (lines[k].trim() !== '') break;
   }
   const body = lines.slice(k).join(' ');
-  if ((h.Variant || 'Standard') !== 'Standard' || h.FEN) return null;
+  const variant = h.Variant || 'Standard';
+  if ((variant !== 'Standard' && variant !== 'Chess') || (h.FEN && h.SetUp === '1') || (h.FEN && !/^rnbqkbnr\/pppppppp\/8\/8\/8\/8\/PPPPPPPP\/RNBQKBNR w KQkq/.test(h.FEN))) return null;
   const raw = [];
   const re = /\{([^}]*)\}|([^\s{}]+)/g;
   let t, depth = 0;
@@ -59,19 +60,41 @@ export function parseGame(str) {
     fens.push(chess.fen());
   }
   if (moves.length < 4) return null;
-  const tc = (h.TimeControl || '').match(/^(\d+)\+(\d+)$/);
-  const site = h.Site || h.GameId || '';
-  const id = (site.match(/lichess\.org\/(\w{8})/) || [])[1] ||
-    [h.UTCDate || h.Date, h.UTCTime, h.White, h.Black].join('_');
+  const tc = (h.TimeControl || '').match(/^(\d+)(?:\+(\d+))?$/);
+  const isCC = /chess\.com/i.test(h.Site || '') || /chess\.com/i.test(h.Link || '');
+  const site = isCC ? (h.Link || '') : (h.Site || h.GameId || '');
+  const id = isCC ? ('cc' + ((site.match(/(\d{5,})/) || [])[1] || [h.UTCDate || h.Date, h.UTCTime || h.StartTime, h.White, h.Black].join('_')))
+    : ((site.match(/lichess\.org\/(\w{8})/) || [])[1] || [h.UTCDate || h.Date, h.UTCTime, h.White, h.Black].join('_'));
+  const date = (h.UTCDate || h.Date || '').replace(/\./g, '-'), time = h.UTCTime || h.StartTime || '';
+  const dm = date.match(/^(\d{4})-(\d{2})-(\d{2})$/), tm = time.match(/^(\d{1,2}):(\d{2}):(\d{2})/);
+  const ts = dm ? Date.UTC(+dm[1], +dm[2] - 1, +dm[3], tm ? +tm[1] : 0, tm ? +tm[2] : 0, tm ? +tm[3] : 0) : 0;
+  let opening = h.Opening || '';
+  if (!opening && h.ECOUrl) opening = ccOpening(h.ECOUrl);
+  const base = tc ? +tc[1] : null, inc = tc ? +(tc[2] || 0) : 0;
   return {
-    id, site: /^https?:/.test(site) ? site : '',
+    id, raw: str, platform: isCC ? 'chesscom' : 'lichess', ts, site: /^https?:/.test(site) ? site : '',
     white: h.White || '?', black: h.Black || '?', result: h.Result || '*',
-    date: (h.UTCDate || h.Date || '').replace(/\./g, '-'), time: h.UTCTime || '',
+    date, time,
     whiteElo: parseInt(h.WhiteElo) || null, blackElo: parseInt(h.BlackElo) || null,
-    base: tc ? +tc[1] : null, inc: tc ? +tc[2] : 0, tcLabel: tc ? tcLabel(+tc[1], +tc[2]) : (h.TimeControl || '?'),
-    opening: h.Opening || '', eco: h.ECO || '', termination: h.Termination || '',
+    base, inc, tcLabel: tc ? tcLabel(base, inc) : (h.TimeControl || '?'), speed: tc ? speedOf(base, inc) : 'other',
+    opening, eco: h.ECO || '', termination: h.Termination || '',
     moves, fens,
   };
+}
+
+// Chess.com gives the opening as a URL slug, e.g. .../openings/Italian-Game-Giuoco-Pianissimo-Variation-4.d3
+export function ccOpening(url) {
+  let slug = decodeURIComponent((url.split('/openings/')[1] || '').split('?')[0]);
+  slug = slug.replace(/-\d+\..*$/, '').replace(/-/g, ' ').trim();
+  if (!slug) return '';
+  const m = slug.match(/^(.*?\b(?:Defense|Defence|Game|Opening|Gambit|Attack|System))\b\s*(.*)$/);
+  return m && m[2] ? m[1] + ': ' + m[2] : slug;
+}
+
+// Lichess's speed buckets: estimated duration = base + 40 * increment.
+export function speedOf(base, inc) {
+  const t = base + 40 * inc;
+  return t < 29 ? 'ultrabullet' : t < 180 ? 'bullet' : t < 480 ? 'blitz' : t < 1500 ? 'rapid' : 'classical';
 }
 
 export function tcLabel(base, inc) {
@@ -86,7 +109,7 @@ export function parsePgn(text) {
     try { g = parseGame(s); } catch (e) { g = null; }
     if (g && !seen.has(g.id)) { seen.add(g.id); out.push(g); }
   }
-  out.sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+  out.sort((a, b) => b.ts - a.ts || (b.date + b.time).localeCompare(a.date + a.time));
   return out;
 }
 
@@ -312,12 +335,22 @@ export function gameOutcome(g, col) {
   return 'other';
 }
 
+// Approximate game accuracy from per-move win-chance drops (Lichess-style curve).
+export function moveAccuracy(drop) { return Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * Math.max(0, drop)) - 3.1669)); }
+export function accuracyOf(recs) {
+  if (!recs || !recs.length) return null;
+  const a = recs.map(r => moveAccuracy(r.drop));
+  const mean = a.reduce((s, x) => s + x, 0) / a.length;
+  const harm = a.length / a.reduce((s, x) => s + 1 / Math.max(x, 5), 0);
+  return (mean + harm) / 2;
+}
+
 export function summarize(games, analysis, user) {
   const S = {
     games: 0, analysed: 0, win: 0, draw: 0, loss: 0, moves: 0, blunders: 0, mistakes: 0,
     cat: {}, phase: {}, clock: {}, think: {}, piece: {}, openings: {},
     lostOnTime: 0, flaggedWinning: 0, wonOnTime: 0, clockCurve: { me: [], opp: [] },
-    phaseTime: {}, sinks: [], puzzles: [], rating: [],
+    phaseTime: {}, sinks: [], puzzles: [], rating: [], ratingSeries: [], accSum: 0, accN: 0,
   };
   const bump = (o, k, f, v = 1) => { (o[k] = o[k] || { n: 0, bad: 0, time: 0 })[f] += v; };
   for (const g of games) {
@@ -327,10 +360,12 @@ export function summarize(games, analysis, user) {
     const out = gameOutcome(g, col);
     if (S[out] !== undefined) S[out]++;
     const elo = col === 'w' ? g.whiteElo : g.blackElo;
-    if (elo) S.rating.push(elo);
+    if (elo) { S.rating.push(elo); S.ratingSeries.push({ ts: g.ts, elo }); }
     const fam = openingFamily(g.opening);
-    const op = S.openings[fam] = S.openings[fam] || { name: fam, n: 0, pts: 0, blunders: 0, analysed: 0 };
+    const op = S.openings[fam] = S.openings[fam] || { name: fam, n: 0, pts: 0, blunders: 0, analysed: 0, win: 0, draw: 0, loss: 0, w: 0, b: 0 };
     op.n++; op.pts += out === 'win' ? 1 : out === 'draw' ? 0.5 : 0;
+    if (op[out] !== undefined) op[out]++;
+    op[col]++;
     const timeLoss = /time/i.test(g.termination) && out === 'loss';
     if (timeLoss) S.lostOnTime++;
     if (/time/i.test(g.termination) && out === 'win') S.wonOnTime++;
@@ -346,6 +381,8 @@ export function summarize(games, analysis, user) {
     const recs = analysis[g.id];
     if (!recs) continue;
     S.analysed++; op.analysed++;
+    const acc = accuracyOf(recs);
+    if (acc != null) { S.accSum += acc; S.accN++; }
     if (timeLoss && recs.length) {
       const last = recs[recs.length - 1];
       if (last.wpA >= 65) S.flaggedWinning++;
@@ -375,9 +412,25 @@ export function summarize(games, analysis, user) {
   S.puzzles.sort((a, b) => b.drop - a.drop);
   S.clockCurve.me = S.clockCurve.me.map(x => x && x.n >= 3 ? x.s / x.n : null);
   S.clockCurve.opp = S.clockCurve.opp.map(x => x && x.n >= 3 ? x.s / x.n : null);
+  S.ratingSeries.sort((a, b) => a.ts - b.ts);
   S.rating.sort((a, b) => a - b);
   S.medianRating = S.rating.length ? S.rating[Math.floor(S.rating.length / 2)] : null;
   return S;
+}
+
+export function isMateEnd(g) { try { return new Chess(g.fens[g.fens.length - 1]).isCheckmate(); } catch (e) { return false; } }
+export function resultText(g, col) {
+  const out = gameOutcome(g, col), t = g.termination || '';
+  const word = out === 'win' ? 'Won' : out === 'loss' ? 'Lost' : out === 'draw' ? 'Draw' : 'Unfinished';
+  if (out === 'draw') {
+    const m = t.match(/drawn? by ([a-z ]+)/i) || t.match(/(stalemate|repetition|agreement|insufficient material|50-move rule|timeout vs insufficient material)/i);
+    return m ? 'Draw by ' + m[1].toLowerCase() : 'Draw';
+  }
+  if (out === 'other') return word;
+  if (/time/i.test(t)) return word + ' on time';
+  if (isMateEnd(g) || /checkmate/i.test(t)) return word + ' by checkmate';
+  if (/abandon/i.test(t)) return word + ' by abandonment';
+  return word + ' by resignation';
 }
 
 export const rate = (o) => o && o.n ? (100 * o.bad / o.n) : 0;

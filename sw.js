@@ -1,6 +1,6 @@
 // Blunderprint service worker: keeps the app's files on the device so it opens offline.
 // VERSION changes on every build, which is how a new version gets noticed.
-const VERSION = '0f29102e973a';
+const VERSION = 'ce06763791e9';
 const CACHE = 'bp-' + VERSION;
 const FONT_CACHE = 'bp-fonts';
 const CORE = [

@@ -470,9 +470,11 @@ function syncErrorText(e, p) {
 
 async function syncProfile({ full = false, onProgress } = {}) {
   const p = st.p;
-  if (!p || st.syncing) return null;
+  if (!p) return null;
+  // A sync for another profile is still running (the user just switched): run ours when it ends.
+  if (st.syncing) { if (st.syncPid !== st.pid) st.syncAgain = { full, onProgress }; return null; }
   if (!full && !navigator.onLine) { syncNote('Offline'); return null; }
-  st.syncing = true; $('sync-btn').classList.add('spin'); syncNote('Syncing…');
+  st.syncing = true; st.syncPid = st.pid; $('sync-btn').classList.add('spin'); syncNote('Syncing…');
   const pid = st.pid, epoch = st.epoch;
   try {
     const since = full ? 0 : (p.lastTs || 0);
@@ -494,7 +496,9 @@ async function syncProfile({ full = false, onProgress } = {}) {
     }
     throw e;
   } finally {
-    st.syncing = false; $('sync-btn').classList.remove('spin');
+    st.syncing = false; st.syncPid = null; $('sync-btn').classList.remove('spin');
+    const again = st.syncAgain; st.syncAgain = null;
+    if (again && st.p && st.pid !== pid) syncProfile(again).catch(() => {});
   }
 }
 
@@ -527,7 +531,7 @@ function initHeader() {
 async function runAnalysis() {
   if (st.running || !st.engA) { updateProgress(); return; }
   st.running = true;
-  const epoch = st.epoch, pid = st.pid;
+  const epoch = st.epoch, pid = st.pid, evals = st.evals;
   let sinceSave = 0;
   while (true) {
     if (st.paused || epoch !== st.epoch) break;
@@ -543,7 +547,9 @@ async function runAnalysis() {
     recompute();
     hv.onAnalysed(g.id);
   }
-  if (epoch === st.epoch) idb.set('evals:' + pid, st.evals);
+  // Always flush, even after a profile switch: otherwise up to 3 finished games are thrown away.
+  // `evals` is this run's own profile object; skip only if that profile was deleted meanwhile.
+  if (sinceSave && st.profiles.some(p => p.id === pid)) idb.set('evals:' + pid, evals);
   st.running = false;
   updateProgress();
   if (epoch !== st.epoch && !st.paused) runAnalysis();
@@ -782,7 +788,7 @@ function initTrain() {
 
 /* ---------- Ghost ---------- */
 const gh = {
-  stage: null, chess: null, me: 'w', on: false, clk: { w: 180, b: 180 }, useClock: true, turnStart: 0, timer: 0, elo: 1400, book: true, src: null, plies: 0,
+  stage: null, chess: null, me: 'w', on: false, clk: { w: 180, b: 180 }, inc: 0, useClock: true, turnStart: 0, timer: 0, elo: 1400, book: true, src: null, plies: 0,
   thinking: false, gtok: 0, fens: [], mvs: [], undos: 0, offset: 0,
   stop() {
     clearInterval(this.timer); this.gtok++; this.on = false; this.chess = null;
@@ -804,8 +810,7 @@ const gh = {
     if (!st.engI) return this.fb('bad', 'The engine is not running on this device, so the ghost cannot play.');
     const mode = $('gh-mode').value;
     this.elo = +$('gh-elo').value; this.useClock = $('gh-clock').checked; this.src = null; this.plies = 0; this.undos = 0; this.offset = 0; this.gtok++;
-    const base = st.games[0]?.base || 180;
-    this.clk = { w: base, b: base };
+    let tcGame = st.games[0];
     let fen = new Chess().fen();
     if (mode === 'worst') {
       const list = (st.S?.puzzles || []).filter(r => r.sev === 'blunder');
@@ -813,11 +818,18 @@ const gh = {
       if (!pick.length) return this.fb('warn', 'No blunder positions yet. Wait for the analysis or start from move one.');
       const r = pick[Math.floor(Math.random() * Math.min(pick.length, 40))];
       const g = st.byId[r.gid];
+      if (g) tcGame = g;   // play on the clock of the game the blunder came from
+      const base = tcGame?.base || 180; this.inc = tcGame?.inc || 0;
+      this.clk = { w: base, b: base };
       this.src = r; fen = r.fen; this.me = fen.split(' ')[1]; this.book = false; this.offset = r.ply;
       if (r.left != null) this.clk[this.me] = Math.max(15, r.left);
       const oppClk = g && r.ply > 0 ? g.moves[r.ply - 1].clk : null;
       if (oppClk != null) this.clk[this.me === 'w' ? 'b' : 'w'] = Math.max(15, oppClk);
-    } else { this.me = mode; this.book = true; }
+    } else {
+      this.me = mode; this.book = true;
+      const base = tcGame?.base || 180; this.inc = tcGame?.inc || 0;
+      this.clk = { w: base, b: base };
+    }
     st.book = C.buildBook(st.games, st.user, st.evals);
     this.chess = new Chess(fen); this.on = true; this.thinking = false; this.fens = [fen]; this.mvs = [];
     $('gh-resign').disabled = false; $('gh-start').textContent = 'New game';
@@ -851,7 +863,7 @@ const gh = {
   },
   commit(mv) {
     const col = mv.color;
-    if (this.useClock) this.clk[col] -= (performance.now() - this.turnStart) / 1000;
+    if (this.useClock) this.clk[col] -= (performance.now() - this.turnStart) / 1000 - this.inc;
     this.turnStart = performance.now(); this.plies++;
     this.mvs.push({ san: mv.san, uci: mv.from + mv.to + (mv.promotion || ''), from: mv.from, to: mv.to, piece: mv.piece, captured: mv.captured || null, color: mv.color, clk: null });
     this.fens.push(this.chess.fen());
@@ -1404,7 +1416,7 @@ const su = {
     this.msg('', `Downloading ${real.username}'s games…`);
     try {
       const added = await syncProfile({ full: true, onProgress: n => this.msg('', `Downloading games… ${n}`) });
-      this.msg('good', added ? `Loaded ${plural(added, 'game')}.` : 'No bullet, blitz or rapid games found yet.');
+      this.msg('good', added ? `Loaded ${plural(added, 'game')}.` : added == null ? 'Your games are downloading and will appear in a moment.' : 'No bullet, blitz or rapid games found yet.');
     } catch (e) { this.msg('bad', syncErrorText(e, p)); }
     this.busy = false; $('su-go').disabled = false;
     $('su-name').value = ''; $('su-user').value = '';
@@ -1568,4 +1580,6 @@ async function initOffline() {
 }
 window.addEventListener('online', () => { syncNote(''); if (st.p) syncProfile().catch(() => {}); });
 window.addEventListener('offline', () => syncNote('Offline'));
+// Phones kill backgrounded apps without warning, so save analysis whenever the page is hidden.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveEvals(); });
 initOffline();

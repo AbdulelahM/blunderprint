@@ -1,7 +1,7 @@
 {
-  "name": "Blunderprint",
-  "short_name": "Blunderprint",
-  "description": "Learn from your own chess mistakes.",
+  "name": "Kish",
+  "short_name": "Kish",
+  "description": "Kish (كش) means check. Learn from your own chess mistakes.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

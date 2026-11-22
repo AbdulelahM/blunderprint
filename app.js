@@ -1,4 +1,4 @@
-// Blunderprint app. Built from tools/parts/*.js by tools/build.py; edit the parts, not site/app.js.
+// Kish app (formerly Blunderprint). Built from tools/parts/*.js by tools/build.py; edit the parts, not site/app.js.
 import * as C from './core.js';
 import * as SY from './sync.js';
 const { Chess } = C;

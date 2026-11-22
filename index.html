@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Kish">
 <title>Kish</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Lalezar&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 /* Layout idea: a chess-site feel. Warm charcoal surfaces, a green and cream board, rounded heavy type,
    chunky buttons with a pressed edge. Green is the action colour; red is kept for mistakes only. */
@@ -520,7 +520,7 @@ https://github.com/shaack/cm-chessboard
 </defs></svg>
 <div class="wrap">
   <header class="top">
-    <div class="mark" title="Kish (كش) is what you call out for check">Kish<span class="ar" lang="ar">كش</span></div>
+    <div class="mark">Kish</div>
     <div class="hdr">
       <span class="syncnote" id="sync-note"></span>
       <button class="iconbtn" id="sync-btn" type="button" aria-label="Sync new games" title="Sync new games"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></button>
@@ -550,7 +550,6 @@ https://github.com/shaack/cm-chessboard
   <section class="view" id="view-setup">
     <div class="setup">
       <h1 id="su-title">Set up your profile</h1>
-      <p class="note" style="margin:-2px 0 10px;font-size:14px"><b style="color:var(--ink)">Kish (كش)</b> is what Arabic speakers call out for "check!". This app turns your own games into training.</p>
       <p class="lede" id="su-lede">Pick where you play and enter your username. Your games load right away.</p>
       <form class="card" id="su-form" novalidate>
         <div class="field"><label for="su-name">Name</label><input type="text" id="su-name" placeholder="AJ" autocomplete="off" maxlength="30"></div>
@@ -708,7 +707,7 @@ https://github.com/shaack/cm-chessboard
     </div>
   </section>
 
-  <footer>Kish (كش) means "check!". Engine: Stockfish 19 (GPL v3) running in your browser. Rules: chess.js. Piece drawings by Cburnett, CC BY-SA 3.0. Games come from the public Lichess and Chess.com APIs. Mistake labels and accuracy are estimates from a fast engine pass.</footer>
+  <footer>Engine: Stockfish 19 (GPL v3) running in your browser. Rules: chess.js. Piece drawings by Cburnett, CC BY-SA 3.0. Games come from the public Lichess and Chess.com APIs. Mistake labels and accuracy are estimates from a fast engine pass.</footer>
 </div>
 <script type="module" src="./app.js"></script>
 </body>

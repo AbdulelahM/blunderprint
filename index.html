@@ -53,16 +53,47 @@ h3 { font-size: 12px; font-weight: 800; margin: 0 0 8px; color: var(--dim); text
 .dim { color: var(--dim); }
 .note { font-size: 13px; color: var(--dim); margin-top: 10px; }
 
-/* header */
+/* header: a top bar with bottom tabs on phones, a sidebar on wider screens */
 header.top { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px 18px; padding: 14px 0 8px; }
-.mark { font-weight: 900; font-size: 26px; letter-spacing: -.01em; line-height: 1; }
-.mark .ar { font-family: "Lalezar", "Geeza Pro", "SF Arabic", "Noto Naskh Arabic", sans-serif; font-weight: 400; color: var(--line); margin-left: 8px; font-size: .92em; }
-.hdr { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; min-width: 0; }
-nav.tabs { grid-column: 1 / -1; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
-nav.tabs::-webkit-scrollbar { display: none; }
-nav.tabs a { font-size: 15px; font-weight: 800; text-decoration: none; color: var(--dim); padding: 8px 14px; border-radius: 8px; white-space: nowrap; }
-nav.tabs a:hover { color: var(--ink); }
-nav.tabs a.on { background: #45423e; color: #fff; box-shadow: inset 0 -3px 0 var(--line); }
+.mark { display: inline-flex; color: #fff; line-height: 0; }
+.mark svg.logo { height: 28px; width: auto; }
+.hdr { display: flex; gap: 8px; align-items: center; justify-content: flex-end; min-width: 0; }
+.hdr .lbl { display: none; }
+nav.tabs { display: flex; }
+nav.tabs a { text-decoration: none; color: var(--dim); font-weight: 800; }
+nav.tabs a svg { width: 24px; height: 24px; flex: none; }
+nav.tabs a.on { color: #fff; }
+nav.tabs a.on svg { color: var(--line); }
+@media (max-width: 899px) {
+  nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--panel); border-top: 1px solid var(--rule);
+    display: grid; grid-template-columns: repeat(5, 1fr); padding: 6px max(4px, env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom)); }
+  nav.tabs a { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11.5px; padding: 3px 0; }
+  .wrap { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .updatebar { bottom: calc(78px + env(safe-area-inset-bottom)); }
+  .hdr .syncnote { display: none; }
+}
+@media (min-width: 900px) {
+  body { padding-left: 232px; }
+  header.top { position: fixed; left: 0; top: 0; bottom: 0; width: 232px; z-index: 30; background: var(--panel); display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 22px 12px 14px !important; overflow-y: auto; }
+  .mark { padding: 2px 12px 20px; }
+  .mark svg.logo { height: 34px; }
+  nav.tabs { flex-direction: column; gap: 4px; }
+  nav.tabs a, .hdr .iconbtn { display: flex; align-items: center; gap: 14px; padding: 11px 12px; border-radius: 8px; color: #d6d4d0; font-size: 16px; font-weight: 800; width: auto; height: auto; background: none; justify-content: flex-start; }
+  nav.tabs a:hover, .hdr .iconbtn:hover { background: #2e2d2a; color: #fff; }
+  nav.tabs a svg, .hdr .iconbtn svg { width: 22px; height: 22px; color: var(--dim); }
+  nav.tabs a.on, .hdr .iconbtn.on { background: var(--raise); color: #fff; box-shadow: inset 3px 0 0 var(--line); }
+  nav.tabs a.on svg, .hdr .iconbtn.on svg { color: var(--line); }
+  .hdr { margin-top: auto; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 2px; }
+  .hdr .lbl { display: inline; }
+  .hdr .syncnote { padding: 0 12px 4px 48px; font-size: 12px; margin-top: -6px; }
+  .hdr .syncnote:empty { display: none; }
+  .hdr .iconbtn.spin svg { animation: spin 1s linear infinite; }
+  .hdr .pmenu { border-top: 1px solid var(--rule); margin-top: 8px; padding-top: 10px; }
+  .hdr .pbtn { width: 100%; max-width: none; background: none; border-radius: 8px; padding: 8px 10px; }
+  .hdr .pbtn .pf { margin-left: auto; }
+  .hdr .menu { top: auto; bottom: calc(100% + 6px); right: auto; left: 0; width: 100%; }
+  .wrap { padding-top: 22px; }
+}
 .pmenu { position: relative; }
 .pbtn { display: inline-flex; align-items: center; gap: 8px; background: var(--raise); border: 0; border-radius: 999px; padding: 6px 12px 6px 6px; cursor: pointer; font-weight: 800; font-size: 14px; max-width: 240px; }
 .pbtn:hover { background: #45423e; }
@@ -151,6 +182,7 @@ input[type=file] { font-size: 14px; color: var(--dim); }
 .evalbar b.onw { color: #403d39; } .evalbar b.onb { color: #fff; }
 .evalbar b.top { top: 0; } .evalbar b.bot { bottom: 0; }
 .stg.quiet .evalbar i, .stg.quiet .evalbar b { display: none; }
+.stg.live .navrow, .stg.live .poslabel { display: none; }
 .navrow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 8px 0 0 34px; }
 .navrow .nb { min-width: 42px; padding: 8px 0; font-size: 18px; line-height: 1; font-weight: 900; }
 .poslabel { font-size: 13px; color: var(--dim); font-weight: 700; margin: 8px 0 0 34px; min-height: 18px; overflow-wrap: anywhere; }
@@ -193,6 +225,57 @@ dl.info .hide { color: var(--dim); font-weight: 700; font-style: italic; }
 .clk.low { background: var(--blunder); color: #fff; }
 .who { font-size: 14px; color: var(--ink); font-weight: 800; }
 .movelist { font-size: 13px; color: var(--dim); font-weight: 700; max-height: 110px; overflow-y: auto; overflow-wrap: anywhere; }
+
+/* play */
+.bots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.bc { background: var(--panel); border-radius: 16px; overflow: hidden; position: relative; display: flex; flex-direction: column; border: 0; padding: 0; text-align: left; cursor: pointer; color: var(--ink); transition: transform .12s; }
+.bc:hover { transform: translateY(-2px); }
+.bc.on { box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.bc.on::after { content: ""; position: absolute; inset: 0; border: 3px solid var(--c1); border-radius: inherit; pointer-events: none; z-index: 3; }
+.bc .ban { position: relative; height: 118px; background: linear-gradient(135deg, var(--c1), var(--c2)); overflow: hidden; }
+.bc .ban .pt { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bc .ban .pc2 { position: absolute; left: 50%; top: 50%; width: 84px; height: 84px; transform: translate(-50%, -50%); filter: drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
+.bc .lvl { position: absolute; left: 12px; top: 10px; font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.85); }
+.bc .elo { position: absolute; right: 10px; top: 9px; background: rgba(0,0,0,.28); color: #fff; font-weight: 900; font-size: 13px; padding: 3px 10px; border-radius: 99px; font-variant-numeric: tabular-nums; }
+.bc .chk { position: absolute; right: 10px; bottom: 10px; width: 26px; height: 26px; border-radius: 50%; background: #fff; color: var(--c2); display: grid; place-items: center; font-weight: 900; }
+.bc .bd { padding: 12px 14px 14px; display: grid; gap: 8px; flex: 1; align-content: start; }
+.bc .nm { font-size: 20px; font-weight: 900; line-height: 1.1; display: flex; align-items: center; gap: 8px; }
+.bc .nm small { display: none; font-size: 12px; font-weight: 900; color: var(--c1); background: rgba(255,255,255,.06); border-radius: 99px; padding: 1px 8px; }
+.bc .bio { font-size: 13px; color: var(--dim); font-weight: 700; line-height: 1.35; min-height: 35px; }
+.bc .rec { display: grid; gap: 6px; margin-top: auto; }
+.bc .rbar { display: flex; height: 6px; border-radius: 99px; overflow: hidden; background: var(--raise); }
+.bc .rbar i { display: block; height: 100%; }
+.bc .rnum { display: flex; gap: 10px; align-items: center; font-size: 12px; font-weight: 800; color: var(--dim); min-height: 20px; }
+.bc .rnum .w { color: var(--good); } .bc .rnum .l { color: var(--blunder); }
+.bc .bt { margin-left: auto; display: inline-flex; gap: 4px; align-items: center; background: rgba(242,197,58,.16); color: #f2c53a; border-radius: 99px; padding: 2px 9px; font-size: 11px; font-weight: 900; }
+.plbar { background: var(--panel); border-radius: 14px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 16px; border-left: 5px solid var(--c1, var(--line)); }
+.plbar .vs { font-weight: 900; }
+.plbar .vs b { color: var(--c1); }
+.plbar .grow { flex: 1; }
+.plopts { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.ghelo { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--dim); font-weight: 800; }
+.ghelo b { color: var(--ink); min-width: 36px; font-variant-numeric: tabular-nums; }
+.ghelo input { width: 140px; }
+.ghclk { font-size: 14px; font-weight: 800; color: var(--dim); display: flex; gap: 6px; align-items: center; }
+@media (max-width: 1100px) and (min-width: 761px) { .bots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .bots { grid-template-columns: 1fr; gap: 10px; }
+  .bc { flex-direction: row; border-radius: 14px; }
+  .bc:hover { transform: none; }
+  .bc .ban { height: auto; min-height: 74px; width: 92px; flex: none; }
+  .bc .ban .pc2 { width: 62px; height: 62px; }
+  .bc .lvl, .bc .elo, .bc .chk, .bc .bio { display: none; }
+  .bc .bd { padding: 10px 12px; gap: 6px; }
+  .bc .nm { font-size: 17px; }
+  .bc .nm small { display: inline; }
+  #pl-pick { padding-bottom: 170px; }
+  .plbar { position: fixed; left: 0; right: 0; bottom: calc(62px + env(safe-area-inset-bottom)); margin: 0; z-index: 35; border-radius: 14px 14px 0 0; border-left: 0; border-top: 4px solid var(--c1, var(--line)); box-shadow: 0 -8px 20px rgba(0,0,0,.35); gap: 8px; padding: 10px 12px; }
+  .plbar .vs { width: 100%; }
+  .plbar .grow { display: none; }
+  .plbar .btn.big { width: 100%; padding: 10px; }
+  .plopts { gap: 8px; }
+  .ghelo input { width: 110px; }
+}
 
 /* history */
 .hfilters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
@@ -306,18 +389,18 @@ footer { margin-top: 30px; font-size: 12px; color: var(--dim); border-top: 1px s
 
 @media (max-width: 760px) {
   .trainer { grid-template-columns: 1fr; gap: 14px; }
-  .mark { font-size: 22px; }
-  .hdr .syncnote { display: none; }
-  header.top { grid-template-columns: auto minmax(0, 1fr); }
-  .hdr { flex-wrap: nowrap; gap: 6px; }
+  .hdr { gap: 6px; }
   .pbtn .nm { max-width: 92px; }
   .pbtn .pf { display: none; }
-  nav.tabs a { padding: 8px 10px; font-size: 14px; }
   .grow-row { grid-template-columns: 6px 54px minmax(0, 1fr) auto; }
   .grow-row .bl { display: none; }
   .fix { grid-template-columns: 32px minmax(0, 1fr); } .fix .rank { font-size: 40px; }
   .pb { grid-template-columns: 22px 54px minmax(0, 1fr); gap: 8px; }
   .ask { font-size: 19px; }
+  .trainbar { gap: 8px; }
+  .trainbar .grow, .trainbar .lg { display: none; }
+  .trainbar .seg button { padding: 6px 10px; font-size: 14px; }
+  .trainbar select.inline { width: 100%; }
 }
 @media (max-width: 420px) {
   .stage-row { grid-template-columns: 22px minmax(0, 1fr); gap: 4px; }
@@ -348,14 +431,13 @@ Authors:
 - https://en.wikipedia.org/wiki/User:Rfc1394
 
 modified by shaack (https://shaack.com) for the usage in cm-chessboard.
+King finial (in place of the cross) changed for Kish, same licence.
 https://github.com/shaack/cm-chessboard
 
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
 <g id="wk" stroke-linecap="round" stroke-linejoin="round" transform="translate(5.000000, 5.000000)" stroke="#000000"
        stroke-width="1.5">
-        <line x1="15" y1="4.96764706" x2="15" y2="0" id="Shape"/>
-        <line x1="12.8571429" y1="1.76470588" x2="17.1428571" y2="1.76470588" id="Shape"/>
         <path d="M17.5714286,7.5 C17.5714286,7.5 16.7142857,5.29411765 15,5.29411765 C13.2857143,5.29411765 12.4285714,7.5 12.4285714,7.5 C11.1428571,10.1470588 15,16.7647059 15,16.7647059 C15,16.7647059 18.8571429,10.1470588 17.5714286,7.5 Z"
               id="Shape" fill="#FFFFFF"/>
         <path d="M5.57142857,27.3529412 C10.2857143,30.4411765 18.8571429,30.4411765 23.5714286,27.3529412 L23.5714286,21.1764706 C23.5714286,21.1764706 31.2857143,17.2058824 28.7142857,11.9117647 C25.2857143,6.17647059 17.1428571,8.82352941 15,15.4411765 L15,18.5294118 L15,15.4411765 C12,8.82352941 3.85714286,6.17647059 1.28571429,11.9117647 C-1.28571429,17.2058824 5.57142857,20.7352941 5.57142857,20.7352941 L5.57142857,27.3529412 Z"
@@ -366,6 +448,8 @@ https://github.com/shaack/cm-chessboard
               fill-opacity="0" fill="#000000" stroke-linecap="square"/>
         <path d="M5.57142857,27.3529412 C10.2857143,24.7058824 18.8571429,24.7058824 23.5714286,27.3529412" id="Shape"
               fill-opacity="0" fill="#000000"/>
+        <line x1="15" y1="5.2" x2="15" y2="3.6" stroke="#000000" stroke-width="1.5"/>
+        <circle cx="15" cy="2.1" r="1.7" fill="#FFFFFF" stroke="#000000" stroke-width="1.3"/>
     </g>
 <g id="wq" stroke-linecap="round" stroke-linejoin="round" transform="translate(4.000000, 5.000000)" stroke="#000000"
        stroke-width="1.5">
@@ -433,16 +517,16 @@ https://github.com/shaack/cm-chessboard
     </g>
 <g id="bk" stroke-linecap="round" stroke-linejoin="round" transform="translate(5.000000, 5.000000)"
        stroke-width="1.5">
-        <line x1="15" y1="4.96764706" x2="15" y2="0" id="Shape" stroke="#000000"/>
         <path d="M15,16.7647059 C15,16.7647059 18.8571429,10.1470588 17.5714286,7.5 C17.5714286,7.5 16.7142857,5.29411765 15,5.29411765 C13.2857143,5.29411765 12.4285714,7.5 12.4285714,7.5 C11.1428571,10.1470588 15,16.7647059 15,16.7647059"
               id="Shape" stroke="#000000" fill="#000000"/>
         <path d="M5.57142857,27.3529412 C10.2857143,30.4411765 18.8571429,30.4411765 23.5714286,27.3529412 L23.5714286,21.1764706 C23.5714286,21.1764706 31.2857143,17.2058824 28.7142857,11.9117647 C25.2857143,6.17647059 17.1428571,8.82352941 15,15.4411765 L15,18.5294118 L15,15.4411765 C12,8.82352941 3.85714286,6.17647059 1.28571429,11.9117647 C-1.28571429,17.2058824 5.57142857,20.7352941 5.57142857,20.7352941 L5.57142857,27.3529412 Z"
               id="Shape" stroke="#000000" fill="#000000"/>
-        <line x1="12.8571429" y1="1.76470588" x2="17.1428571" y2="1.76470588" id="Shape" stroke="#000000"/>
         <path d="M23.1428571,20.7352941 C23.1428571,20.7352941 30.4285714,17.2058824 28.3114286,12.2205882 C24.9857143,7.05882353 17.1428571,10.5882353 15,16.3235294 L15.0085714,18.1764706 L15,16.3235294 C12.8571429,10.5882353 4.20514286,7.05882353 1.71171429,12.2205882 C-0.428571429,17.2058824 5.87142857,20.1617647 5.87142857,20.1617647"
               id="Shape" stroke="#FFFFFF"/>
         <path d="M5.57142857,21.1764706 C10.2857143,18.5294118 18.8571429,18.5294118 23.5714286,21.1764706 M5.57142857,24.2647059 C10.2857143,21.6176471 18.8571429,21.6176471 23.5714286,24.2647059 M5.57142857,27.3529412 C10.2857143,24.7058824 18.8571429,24.7058824 23.5714286,27.3529412"
               id="Shape" stroke="#FFFFFF"/>
+        <line x1="15" y1="5.2" x2="15" y2="3.6" stroke="#000000" stroke-width="1.5"/>
+        <circle cx="15" cy="2.1" r="1.7" fill="#000000" stroke="#000000" stroke-width="1.3"/>
     </g>
 <g id="bq" stroke-linecap="round" stroke-linejoin="round" transform="translate(3.000000, 4.000000)">
         <g id="Group" fill="#000000">
@@ -520,23 +604,23 @@ https://github.com/shaack/cm-chessboard
 </defs></svg>
 <div class="wrap">
   <header class="top">
-    <div class="mark">Kish</div>
+    <a class="mark" href="#train" aria-label="Kish, home"><svg class="logo" viewBox="0.2 3.1 109.8 54.0" role="img" aria-label="Kish"><path d="M28.706 44.328Q31.0 46.374 31.155 48.203Q31.31 50.032 29.078 52.388Q27.404 54.124 26.195 54.650999999999996Q24.986 55.178 23.808 54.650999999999996Q22.63 54.124 21.018 52.698L13.392 45.568V48.978Q13.392 50.342 13.144 51.644Q12.896 52.946 11.749 53.751999999999995Q10.602 54.558 7.75 54.558Q4.96 54.558 3.782 53.721000000000004Q2.604 52.884 2.387 51.582Q2.17 50.28 2.17 48.916V14.381999999999998Q2.17 12.956000000000003 2.418 11.685000000000002Q2.666 10.414000000000001 3.8440000000000003 9.577000000000002Q5.022 8.740000000000002 7.812 8.740000000000002Q10.602 8.740000000000002 11.749 9.577000000000002Q12.896 10.414000000000001 13.144 11.716000000000001Q13.392 13.018 13.392 14.444000000000003V31.556L18.662 26.41Q20.15 24.984 21.451999999999998 24.457Q22.754 23.93 24.025 24.395Q25.296 24.86 26.722 26.41Q29.14 29.014 29.047 30.625999999999998Q28.954 32.238 26.722 34.47L21.7 38.872ZM39.06 54.558Q36.269999999999996 54.558 35.092 53.721000000000004Q33.914 52.884 33.697 51.582Q33.48 50.28 33.48 48.916V28.704Q33.48 27.34 33.727999999999994 26.069000000000003Q33.976 24.798000000000002 35.153999999999996 23.961Q36.332 23.124 39.122 23.124Q41.912 23.124 43.059 23.961Q44.206 24.798000000000002 44.454 26.1Q44.702 27.402 44.702 28.828V48.978Q44.702 50.342 44.454 51.644Q44.206 52.946 43.059 53.751999999999995Q41.912 54.558 39.06 54.558ZM60.016000000000005 55.116Q58.28 55.116 56.141000000000005 54.713Q54.002 54.31 51.987 53.535Q49.972 52.76 48.67 51.706Q47.368 50.652 47.368 49.288Q47.368 48.668 47.647000000000006 47.893Q47.926 47.118 48.422 46.188Q48.918 45.258 49.662000000000006 44.204Q50.096000000000004 43.584 50.685 43.274Q51.274 42.964 52.080000000000005 42.964Q53.196000000000005 42.964 54.25 43.429Q55.304 43.894 56.358000000000004 44.483000000000004Q57.412000000000006 45.072 58.559000000000005 45.537000000000006Q59.706 46.002 61.008 46.002Q62.186 46.002 62.775000000000006 45.754000000000005Q63.364000000000004 45.506 63.364000000000004 45.01Q63.364000000000004 44.513999999999996 62.961000000000006 44.20399999999999Q62.55800000000001 43.894 61.845000000000006 43.677Q61.132000000000005 43.46 60.202000000000005 43.274Q59.272000000000006 43.088 58.218 42.84Q57.164 42.592 56.048 42.22Q54.622 41.786 53.258 41.073Q51.894000000000005 40.36 50.809000000000005 39.182Q49.724000000000004 38.004 49.07300000000001 36.33Q48.422000000000004 34.656 48.422000000000004 32.238Q48.422000000000004 29.014 49.910000000000004 26.844Q51.398 24.674 54.312 23.558Q57.226 22.442 61.504000000000005 22.442Q62.55800000000001 22.442 63.612 22.566000000000003Q64.666 22.69 65.751 22.938000000000002Q66.836 23.186 67.92099999999999 23.589Q69.006 23.992 70.122 24.488Q72.416 25.48 72.47800000000001 27.247Q72.54 29.014 71.176 30.936Q70.432 32.114000000000004 69.65700000000001 32.703Q68.882 33.292 68.076 33.292Q67.084 33.292 65.906 32.734Q64.72800000000001 32.176 63.426 31.618000000000002Q62.124 31.06 60.822 31.06Q60.078 31.06 59.551 31.215Q59.024 31.37 58.776 31.649Q58.528000000000006 31.928 58.528000000000006 32.3Q58.528000000000006 32.982 58.993 33.385Q59.458 33.788 60.233000000000004 34.036Q61.008 34.284 62.031000000000006 34.47Q63.054 34.656 64.232 34.842Q65.844 35.09 67.549 35.617000000000004Q69.254 36.144 70.68 37.135999999999996Q72.106 38.128 72.97399999999999 39.864000000000004Q73.842 41.6 73.842 44.39Q73.842 49.66 70.339 52.388Q66.836 55.116 60.016000000000005 55.116ZM82.08800000000001 54.558Q79.298 54.558 78.12 53.721000000000004Q76.94200000000001 52.884 76.72500000000001 51.582Q76.50800000000001 50.28 76.50800000000001 48.916V14.444000000000003Q76.50800000000001 13.018 76.756 11.747Q77.004 10.475999999999999 78.182 9.669999999999998Q79.36 8.863999999999997 82.15 8.863999999999997Q84.94 8.863999999999997 86.087 9.701Q87.23400000000001 10.538000000000004 87.482 11.809000000000001Q87.73 13.079999999999998 87.73 14.506V25.79Q88.66000000000001 24.922 90.24100000000001 24.023Q91.822 23.124 93.93 23.124Q97.89800000000001 23.124 101.06 25.201Q104.22200000000001 27.278 106.08200000000001 30.812Q107.94200000000001 34.346000000000004 107.94200000000001 38.81V48.978Q107.94200000000001 50.342 107.694 51.613Q107.446 52.884 106.299 53.721000000000004Q105.152 54.558 102.30000000000001 54.558Q99.572 54.558 98.363 53.751999999999995Q97.15400000000001 52.946 96.906 51.644Q96.658 50.342 96.658 48.854V38.748Q96.658 37.384 96.162 36.423Q95.666 35.462 94.736 34.904Q93.80600000000001 34.346000000000004 92.504 34.346000000000004Q90.83000000000001 34.346000000000004 89.40400000000001 35.400000000000006Q87.97800000000001 36.454 87.73 37.818V48.978Q87.73 50.342 87.482 51.644Q87.23400000000001 52.946 86.087 53.751999999999995Q84.94 54.558 82.08800000000001 54.558Z" fill="currentColor"/><circle cx="39.09" cy="13.12" r="7.5" fill="#f0503c"/></svg></a>
+    <nav class="tabs" id="tabs" aria-label="Sections">
+      <a href="#train" data-tab="train"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".9" fill="currentColor"/></svg><span>Train</span></a>
+      <a href="#play" data-tab="play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M10.2 8.6l5.2 3.4-5.2 3.4z" fill="currentColor"/></svg><span>Play</span></a>
+      <a href="#history" data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span>History</span></a>
+      <a href="#stats" data-tab="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V11M10 20V5M15 20v-7M20 20V9"/></svg><span>Stats</span></a>
+      <a href="#improve" data-tab="improve"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l5-5 4 3 7-8"/><path d="M15 7h5v5"/></svg><span>Improve</span></a>
+    </nav>
     <div class="hdr">
+      <button class="iconbtn" id="sync-btn" type="button" aria-label="Sync new games" title="Sync new games"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg><span class="lbl">Sync</span></button>
       <span class="syncnote" id="sync-note"></span>
-      <button class="iconbtn" id="sync-btn" type="button" aria-label="Sync new games" title="Sync new games"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></button>
-      <a class="iconbtn" href="#settings" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></a>
+      <a class="iconbtn" href="#settings" data-tab="settings" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="lbl">Settings</span></a>
       <div class="pmenu">
         <button class="pbtn" id="p-btn" type="button" aria-haspopup="true" aria-expanded="false"><span class="av" id="p-av">?</span><span class="nm" id="p-name">No profile</span><span class="pf" id="p-plat"></span></button>
         <div class="menu" id="p-menu" hidden></div>
       </div>
     </div>
-    <nav class="tabs" id="tabs" aria-label="Sections">
-      <a href="#train" data-tab="train">Train</a>
-      <a href="#ghost" data-tab="ghost">Ghost</a>
-      <a href="#history" data-tab="history">History</a>
-      <a href="#stats" data-tab="stats">Stats</a>
-      <a href="#improve" data-tab="improve">Improve</a>
-    </nav>
   </header>
   <div class="alert" id="alert" hidden></div>
   <div class="updatebar" id="update-bar" hidden role="status"><span>New version ready</span><button class="btn primary" id="update-go" type="button">Reload</button></div>
@@ -572,6 +656,7 @@ https://github.com/shaack/cm-chessboard
     <div class="trainbar">
       <div class="seg" role="tablist" aria-label="Training mode"><button type="button" data-mode="pz" class="on" role="tab">Mistakes</button><button type="button" data-mode="dr" role="tab">Speed</button></div>
       <span class="grow"></span>
+      <div class="seg" id="pz-order" aria-label="Order"><button type="button" data-o="new" class="on">Newest<span class="lg"> games</span></button><button type="button" data-o="rand">Random</button></div>
       <select class="inline" id="pz-filter" aria-label="Mistake type"></select>
     </div>
 
@@ -608,33 +693,52 @@ https://github.com/shaack/cm-chessboard
     </div>
   </section>
 
-  <!-- ============ GHOST ============ -->
-  <section class="view" id="view-ghost">
-    <div class="trainer">
-      <div class="boardcol">
-        <div class="clocks"><span class="who" id="gh-top-name">Ghost</span><span class="clk" id="gh-top-clk">3:00</span></div>
-        <div id="gh-stage"></div>
-        <div class="clocks"><span class="who" id="gh-bot-name">You</span><span class="clk" id="gh-bot-clk">3:00</span></div>
-      </div>
-      <div class="side">
-        <div class="ask">Play the ghost<small>Opens with your real opponents' moves, then plays at about your level.</small></div>
-        <div class="field"><label for="gh-mode">Start from</label>
-          <select id="gh-mode">
-            <option value="worst">A position where I blundered</option>
-            <option value="w">Move one, I play White</option>
-            <option value="b">Move one, I play Black</option>
-          </select></div>
-        <div class="field"><label for="gh-elo">Ghost strength: <span id="gh-elo-val">1400</span></label>
-          <input type="range" id="gh-elo" min="800" max="2400" step="50" value="1400"></div>
-        <div class="field"><label><input type="checkbox" id="gh-clock" checked> Play on the clock</label></div>
-        <div class="btns">
-          <button class="btn primary" id="gh-start" type="button">Start game</button>
-          <button class="btn quiet" id="gh-undo" type="button" disabled>Take back</button>
-          <button class="btn quiet" id="gh-resign" type="button" disabled>Resign</button>
+  <!-- ============ PLAY ============ -->
+  <section class="view" id="view-play">
+    <div id="pl-pick">
+      <h1 style="margin-bottom:4px">Play</h1>
+      <p class="dim" style="margin-bottom:16px">Pick an opponent. Each master is stronger than the last.</p>
+      <div class="bots" id="pl-bots"></div>
+      <div class="plbar" id="pl-bar">
+        <span class="vs" id="pl-vs"></span>
+        <div class="plopts" id="pl-bot-opts">
+          <div class="chips" id="pl-tc" aria-label="Time control"><button type="button" data-v="180">3+0</button><button type="button" data-v="300">5+0</button><button type="button" data-v="600">10+0</button><button type="button" data-v="0">No clock</button></div>
+          <div class="chips" id="pl-col" aria-label="Your colour"><button type="button" data-v="r">Random colour</button><button type="button" data-v="w">White</button><button type="button" data-v="b">Black</button></div>
         </div>
-        <div class="fb" id="gh-fb">Pick a start and press Start game.</div>
-        <div class="movelist" id="gh-moves"></div>
-        <div class="count" id="gh-record"></div>
+        <div class="plopts" id="pl-gh-opts" hidden>
+          <select class="inline" id="gh-mode" aria-label="Start from">
+            <option value="worst">From a position where I blundered</option>
+            <option value="w">From move one, I play White</option>
+            <option value="b">From move one, I play Black</option>
+          </select>
+          <label class="ghelo">Strength <b id="gh-elo-val">1400</b><input type="range" id="gh-elo" min="800" max="2400" step="50" value="1400"></label>
+          <label class="ghclk"><input type="checkbox" id="gh-clock" checked> Clock</label>
+        </div>
+        <span class="grow"></span>
+        <button class="btn primary big" id="pl-go" type="button">Play</button>
+      </div>
+    </div>
+    <div id="pl-game" hidden>
+      <div class="gvhead">
+        <button class="btn quiet" id="gh-back" type="button">‹ Opponents</button>
+        <div class="t" id="gh-title"></div>
+      </div>
+      <div class="trainer">
+        <div class="boardcol">
+          <div class="clocks"><span class="who" id="gh-top-name">Ghost</span><span class="clk" id="gh-top-clk">3:00</span></div>
+          <div id="gh-stage"></div>
+          <div class="clocks"><span class="who" id="gh-bot-name">You</span><span class="clk" id="gh-bot-clk">3:00</span></div>
+        </div>
+        <div class="side">
+          <div class="btns">
+            <button class="btn quiet" id="gh-undo" type="button" disabled>Take back</button>
+            <button class="btn quiet" id="gh-resign" type="button" disabled>Resign</button>
+            <button class="btn primary" id="gh-start" type="button" hidden>Rematch</button>
+          </div>
+          <div class="fb" id="gh-fb"></div>
+          <div class="movelist" id="gh-moves"></div>
+          <div class="count" id="gh-record"></div>
+        </div>
       </div>
     </div>
   </section>

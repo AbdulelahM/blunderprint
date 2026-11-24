@@ -1,6 +1,6 @@
 // Kish service worker: keeps the app's files on the device so it opens offline.
 // VERSION changes on every build, which is how a new version gets noticed.
-const VERSION = 'f43b516f18ec';
+const VERSION = 'b53c156fa946';
 const CACHE = 'bp-' + VERSION;
 const FONT_CACHE = 'bp-fonts';
 const CORE = [

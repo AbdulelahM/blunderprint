@@ -194,6 +194,7 @@ class Stage {
   ui() {
     const q = this.quiet || this.mode !== 'explore', m = this.main, atStart = this.idx === 0 && !this.vari.length, atEnd = this.vari.length > 0 || this.idx >= m.fens.length - 1;
     this.root.classList.toggle('quiet', q);
+    this.root.classList.toggle('live', this.mode === 'live');
     const set = (a, dis) => { this.root.querySelector(`[data-a="${a}"]`).disabled = dis; };
     set('first', q || atStart); set('prev', q || atStart); set('next', q || atEnd); set('last', q || atEnd); set('hint', q);
     set('reset', q || (this.o.resetMode === 'branch' ? !this.vari.length : (!this.vari.length && this.idx === m.anchor && !this.arrow)));
@@ -437,7 +438,7 @@ async function loadProfile(pid) {
   st.prog = pls.get('prog', {});
   renderHeader();
   refilter();
-  pz.reset(); dr.reset(); hv.reset();
+  pz.reset(); dr.reset(); hv.reset(); pl.load();
   const elo = st.S.medianRating; if (elo) { $('gh-elo').value = Math.round(elo / 50) * 50; $('gh-elo-val').textContent = $('gh-elo').value; }
   fillSettings();
   runAnalysis();
@@ -562,7 +563,7 @@ function updateProgress() {
 
 /* ---------- Train: mistakes ---------- */
 const pz = {
-  stage: null, filter: 'all', rec: null, done: false, tok: 0, list: [], i: -1,
+  stage: null, filter: 'all', order: 'new', shuf: null, rec: null, done: false, tok: 0, list: [], i: -1,
   init() {
     this.stage = new Stage($('pz-stage'), {
       onMove: x => this.onMove(x),
@@ -572,6 +573,7 @@ const pz = {
     $('pz-prev').onclick = () => this.go(this.i - 1);
     $('pz-next').onclick = () => this.go(this.i + 1);
     $('pz-show').onclick = () => this.show();
+    $('pz-order').onclick = e => { const b = e.target.closest('[data-o]'); if (b) this.setOrder(b.dataset.o); };
     $('pz-filter').onchange = e => { this.filter = e.target.value; pls.set('pzfilter', this.filter); this.rebuild(); this.go(0); };
     $('pz-strip').onclick = e => {
       const b = e.target.closest('[data-g]'); if (!b) return;
@@ -579,18 +581,30 @@ const pz = {
     };
   },
   key: r => r.gid + ':' + r.ply,
-  // Newest game first, then move order inside each game.
+  // Newest: newest game first, then move order inside each game.
+  // Random: a weighted shuffle drawn once, where unsolved positions are three times as likely to come early.
+  // New positions found later get their own draw, so the order stays put while you work through it.
+  rank(r) {
+    const k = this.key(r);
+    if (!this.shuf.has(k)) { const w = st.prog[k]?.ok ? 1 : 3; this.shuf.set(k, Math.pow(Math.random(), 1 / w)); }
+    return this.shuf.get(k);
+  },
   rebuild() {
     const all = (st.S?.puzzles || []).filter(r => st.byId[r.gid]);
-    this.list = all.filter(r => this.filter === 'all' || r.cat === this.filter)
-      .sort((a, b) => (st.gameIdx[a.gid] - st.gameIdx[b.gid]) || (a.ply - b.ply));
+    this.list = all.filter(r => this.filter === 'all' || r.cat === this.filter);
+    if (this.order === 'rand') { if (!this.shuf) this.shuf = new Map(); this.list.sort((a, b) => this.rank(b) - this.rank(a)); }
+    else this.list.sort((a, b) => (st.gameIdx[a.gid] - st.gameIdx[b.gid]) || (a.ply - b.ply));
+    document.querySelectorAll('#pz-order button').forEach(b => b.classList.toggle('on', b.dataset.o === this.order));
+    $('pz-strip').hidden = this.order === 'rand';
     const cats = st.S?.cat || {};
     $('pz-filter').innerHTML = `<option value="all">All mistakes (${all.length})</option>` +
       C.CAT_ORDER.filter(k => cats[k]).map(k => `<option value="${k}"${this.filter === k ? ' selected' : ''}>${esc(C.CATS[k].label)} (${cats[k]})</option>`).join('');
     if (this.filter !== 'all' && !cats[this.filter]) { this.filter = 'all'; return this.rebuild(); }
     $('pz-filter').value = this.filter;
   },
-  reset() { this.rec = null; this.i = -1; this.filter = pls.get('pzfilter', 'all'); this.rebuild(); this.resume(); },
+  reset() { this.rec = null; this.i = -1; this.shuf = null; this.filter = pls.get('pzfilter', 'all'); this.order = pls.get('pzorder', 'new'); this.rebuild(); this.resume(); },
+  // Tapping Random again draws a fresh order.
+  setOrder(o) { if (o === 'rand') this.shuf = null; this.order = o; pls.set('pzorder', o); this.rebuild(); this.go(0); },
   resume() {
     if (!this.list.length) return this.empty();
     const saved = pls.get('pzkey', null);
@@ -633,12 +647,14 @@ const pz = {
     const gids = []; for (const x of this.list) if (gids[gids.length - 1] !== x.gid) gids.push(x.gid);
     const gi = gids.indexOf(r.gid);
     const solved = st.prog[this.key(r)]?.ok;
-    $('pz-pos').innerHTML = `${this.i + 1} of ${n}<small>${solved ? '<span class="solved">Solved ✓</span> · ' : ''}game ${gi + 1} of ${gids.length}</small>`;
+    const g0 = st.byId[r.gid], where = this.order === 'rand' ? `from ${shortDate(g0.date)} vs ${esc(oppOf(g0, C.userColor(g0, st.user)).name)}` : `game ${gi + 1} of ${gids.length}`;
+    $('pz-pos').innerHTML = `${this.i + 1} of ${n}<small>${solved ? '<span class="solved">Solved ✓</span> · ' : ''}${where}</small>`;
     $('pz-prev').disabled = this.i <= 0; $('pz-next').disabled = this.i >= n - 1;
     const all = st.S?.puzzles || [], fixed = all.filter(x => st.prog[this.key(x)]?.ok).length;
     $('pz-count').textContent = `${fixed} of ${all.length} fixed`;
-    // game strip
+    // game strip (newest order only)
     const strip = $('pz-strip');
+    if (this.order === 'rand') { strip.innerHTML = ''; return; }
     strip.innerHTML = gids.map(id => {
       const g = st.byId[id], col = C.userColor(g, st.user), out = C.gameOutcome(g, col), opp = oppOf(g, col);
       const k = this.list.filter(x => x.gid === id).length;
@@ -770,7 +786,7 @@ const dr = {
 function setTrainMode(m) {
   st.trainMode = m;
   document.querySelectorAll('#view-train .seg button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
-  $('pz-panel').hidden = m !== 'pz'; $('dr-panel').hidden = m !== 'dr'; $('pz-filter').hidden = m !== 'pz';
+  $('pz-panel').hidden = m !== 'pz'; $('dr-panel').hidden = m !== 'dr'; $('pz-filter').hidden = $('pz-order').hidden = m !== 'pz';
   if (m === 'pz' && dr.live) dr.stop();
   if (location.hash !== '#train') location.hash = '#train';
 }
@@ -780,18 +796,82 @@ function initTrain() {
 }
 
 
-/* ---------- Ghost ---------- */
+/* ---------- Play: named bots and the ghost ---------- */
+// Five early masters of shatranj, from the Abbasid court. Ratings are rough targets for the engine.
+const BOTS = [
+  { id: 'rabrab', name: 'Rabrab', elo: 1000, pc: 'wp', c1: '#5f8a4a', c2: '#466b37', bio: "One of the top players at the court of caliph al-Ma'mun." },
+  { id: 'adli', name: 'al-Adli', elo: 1500, pc: 'wn', c1: '#3d8580', c2: '#2c6460', bio: 'Wrote the first known book on chess, in 842.' },
+  { id: 'razi', name: 'ar-Razi', elo: 1800, pc: 'wb', c1: '#4f6fa3', c2: '#3a5582', bio: 'Beat al-Adli in 847, in front of the caliph.' },
+  { id: 'lajlaj', name: 'al-Lajlaj', elo: 2100, pc: 'wr', c1: '#7b5e9e', c2: '#5e4680', bio: '"The stammerer", as-Suli\'s best-known pupil.' },
+  { id: 'suli', name: 'as-Suli', elo: 2400, pc: 'wk', c1: '#a8574a', c2: '#844237', bio: 'The greatest player of his age, and a famous teacher.' },
+];
+const GHOST_CARD = { id: 'ghost', name: 'The Ghost', c1: '#a8a6a2', c2: '#55524e' };
+const STAR8 = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><pattern id="star8" width="36" height="36" patternUnits="userSpaceOnUse"><g fill="none" stroke="#fff" stroke-width="1.1" opacity=".1"><rect x="9" y="9" width="18" height="18"/><rect x="9" y="9" width="18" height="18" transform="rotate(45 18 18)"/><circle cx="0" cy="0" r="4"/><circle cx="36" cy="0" r="4"/><circle cx="0" cy="36" r="4"/><circle cx="36" cy="36" r="4"/></g></pattern></defs></svg>';
+const LAUREL = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20c-4-1-7-4.5-7-9M12 20c4-1 7-4.5 7-9M5 11c1.5 0 3 1 3.5 2.5M19 11c-1.5 0-3 1-3.5 2.5M6 6.5c1.3.3 2.4 1.3 2.7 2.7M18 6.5c-1.3.3-2.4 1.3-2.7 2.7"/></svg>';
+const GHOST_SVG = '<svg class="pc2" viewBox="0 0 24 24" style="filter:none"><path d="M6 21V11a6 6 0 1 1 12 0v10l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5z" fill="#ecedd1" stroke="#302e2b" stroke-width="1.2"/><circle cx="10" cy="11.5" r="1.1" fill="#302e2b"/><circle cx="14" cy="11.5" r="1.1" fill="#302e2b"/></svg>';
+const botRecs = () => pls.get('bots', {});
+
+const pl = {
+  sel: 'adli', tc: 300, col: 'r', leaveArmed: false,
+  init() {
+    $('pl-bots').onclick = e => { const b = e.target.closest('[data-bot]'); if (b) this.pick(b.dataset.bot); };
+    $('pl-tc').onclick = e => { const b = e.target.closest('[data-v]'); if (b) { this.tc = +b.dataset.v; pls.set('pltc', this.tc); this.bar(); } };
+    $('pl-col').onclick = e => { const b = e.target.closest('[data-v]'); if (b) { this.col = b.dataset.v; pls.set('plcol', this.col); this.bar(); } };
+    $('pl-go').onclick = () => gh.start();
+    $('gh-back').onclick = () => this.back();
+  },
+  load() { this.sel = pls.get('plbot', 'adli'); this.tc = pls.get('pltc', 300); this.col = pls.get('plcol', 'r'); this.render(); },
+  cur() { return BOTS.find(b => b.id === this.sel) || null; },
+  pick(id) { this.sel = id; pls.set('plbot', id); this.render(); },
+  render() {
+    const recs = botRecs(), cards = BOTS.map((b, i) => {
+      const r = recs[b.id] || { win: 0, draw: 0, loss: 0 }, n = r.win + r.draw + r.loss, on = this.sel === b.id;
+      const bar = n ? `<i style="width:${100 * r.win / n}%;background:var(--good)"></i><i style="width:${100 * r.draw / n}%;background:#77746f"></i><i style="width:${100 * r.loss / n}%;background:var(--blunder)"></i>` : '';
+      const nums = n ? `<span class="w">${r.win}W</span><span>${r.draw}D</span><span class="l">${r.loss}L</span>` : '<span>Not played yet</span>';
+      return `<button type="button" class="bc${on ? ' on' : ''}" data-bot="${b.id}" style="--c1:${b.c1};--c2:${b.c2}" aria-pressed="${on}">
+        <span class="ban"><svg class="pt"><rect width="100%" height="100%" fill="url(#star8)"/></svg><span class="lvl">Level ${i + 1}</span><span class="elo">~${b.elo}</span>
+        <svg class="pc2" viewBox="0 0 40 40"><use href="#${b.pc}"/></svg>${on ? '<span class="chk">✓</span>' : ''}</span>
+        <span class="bd"><span class="nm">${esc(b.name)}<small>~${b.elo}</small></span><span class="bio">${esc(b.bio)}</span>
+        <span class="rec"><span class="rbar">${bar}</span><span class="rnum">${nums}${r.win > r.loss ? `<span class="bt">${LAUREL} Beaten</span>` : ''}</span></span></span></button>`;
+    });
+    const g = pls.get('ghost', { win: 0, draw: 0, loss: 0 }), gn = g.win + g.draw + g.loss, gon = this.sel === 'ghost';
+    cards.push(`<button type="button" class="bc ghost${gon ? ' on' : ''}" data-bot="ghost" style="--c1:${GHOST_CARD.c1};--c2:${GHOST_CARD.c2}" aria-pressed="${gon}">
+      <span class="ban"><svg class="pt"><rect width="100%" height="100%" fill="url(#star8)"/></svg><span class="lvl">Any level</span><span class="elo">Slider</span>${GHOST_SVG}${gon ? '<span class="chk">✓</span>' : ''}</span>
+      <span class="bd"><span class="nm">The Ghost<small>slider</small></span><span class="bio">Opens like your real opponents. Can start from your blunder positions.</span>
+      <span class="rec"><span class="rbar">${gn ? `<i style="width:${100 * g.win / gn}%;background:var(--good)"></i><i style="width:${100 * g.draw / gn}%;background:#77746f"></i><i style="width:${100 * g.loss / gn}%;background:var(--blunder)"></i>` : ''}</span><span class="rnum">${gn ? `<span class="w">${g.win}W</span><span>${g.draw}D</span><span class="l">${g.loss}L</span> · ` : ''}<span>Takebacks allowed</span></span></span></span></button>`);
+    $('pl-bots').innerHTML = STAR8 + cards.join('');
+    this.bar();
+  },
+  bar() {
+    const b = this.cur(), isG = !b;
+    $('pl-bar').style.setProperty('--c1', isG ? GHOST_CARD.c1 : b.c1);
+    $('pl-vs').innerHTML = isG ? 'vs The Ghost' : `vs ${esc(b.name)} <b>~${b.elo}</b>`;
+    $('pl-bot-opts').hidden = isG; $('pl-gh-opts').hidden = !isG;
+    document.querySelectorAll('#pl-tc button').forEach(x => x.classList.toggle('on', +x.dataset.v === this.tc));
+    document.querySelectorAll('#pl-col button').forEach(x => x.classList.toggle('on', x.dataset.v === this.col));
+  },
+  showGame(on) { $('pl-pick').hidden = on; $('pl-game').hidden = !on; this.leaveArmed = false; $('gh-back').textContent = '‹ Opponents'; if (on) window.scrollTo(0, 0); },
+  back() {
+    if (gh.on) {
+      if (!this.leaveArmed) { this.leaveArmed = true; $('gh-back').textContent = 'Tap again to resign and leave'; return; }
+      gh.end('loss', 'You resigned.');
+    }
+    gh.stop(); this.render(); this.showGame(false);
+  },
+};
+
 const gh = {
-  stage: null, chess: null, me: 'w', on: false, clk: { w: 180, b: 180 }, useClock: true, turnStart: 0, timer: 0, elo: 1400, book: true, src: null, plies: 0,
+  stage: null, chess: null, me: 'w', on: false, bot: null, oppName: 'The ghost', clk: { w: 180, b: 180 }, useClock: true, turnStart: 0, timer: 0, elo: 1400, book: true, src: null, plies: 0,
   thinking: false, gtok: 0, fens: [], mvs: [], undos: 0, offset: 0,
   stop() {
     clearInterval(this.timer); this.gtok++; this.on = false; this.chess = null;
     if (!this.stage) return;
     this.stage.idle();
-    $('gh-resign').disabled = true; $('gh-undo').disabled = true; $('gh-start').textContent = 'Start game';
+    $('gh-resign').disabled = true; $('gh-undo').disabled = true; $('gh-start').hidden = true;
     $('gh-moves').textContent = ''; $('gh-top-clk').textContent = '3:00'; $('gh-bot-clk').textContent = '3:00';
     ['gh-top-clk', 'gh-bot-clk'].forEach(id => $(id).classList.remove('on', 'low'));
-    this.fb('', 'Pick a start and press Start game.');
+    this.fb('', '');
+    pl.showGame(false);
   },
   init() {
     this.stage = new Stage($('gh-stage'), { onLiveMove: m => this.userMove(m), resetLabel: 'Back to the end' });
@@ -799,30 +879,36 @@ const gh = {
     $('gh-resign').onclick = () => this.end('loss', 'You resigned.');
     $('gh-undo').onclick = () => this.takeback();
     $('gh-elo').oninput = e => { $('gh-elo-val').textContent = e.target.value; };
+    pl.init();
   },
   start() {
-    if (!st.engI) return this.fb('bad', 'The engine is not running on this device, so the ghost cannot play.');
-    const mode = $('gh-mode').value;
-    this.elo = +$('gh-elo').value; this.useClock = $('gh-clock').checked; this.src = null; this.plies = 0; this.undos = 0; this.offset = 0; this.gtok++;
-    const base = st.games[0]?.base || 180;
+    const bot = pl.cur();
+    if (!st.engI) { pl.showGame(true); this.fb('bad', 'The chess engine is still starting or cannot run on this device. Try again in a moment.'); return; }
+    const mode = bot ? (pl.col === 'r' ? (Math.random() < .5 ? 'w' : 'b') : pl.col) : $('gh-mode').value;
+    this.bot = bot; this.oppName = bot ? bot.name : 'The ghost';
+    this.elo = bot ? bot.elo : +$('gh-elo').value; this.useClock = bot ? pl.tc > 0 : $('gh-clock').checked; this.src = null; this.plies = 0; this.undos = 0; this.offset = 0; this.gtok++;
+    const base = bot ? (pl.tc || 300) : (st.games[0]?.base || 180);
     this.clk = { w: base, b: base };
     let fen = new Chess().fen();
-    if (mode === 'worst') {
+    if (!bot && mode === 'worst') {
       const list = (st.S?.puzzles || []).filter(r => r.sev === 'blunder');
       const pick = list.length ? list : (st.S?.puzzles || []);
-      if (!pick.length) return this.fb('warn', 'No blunder positions yet. Wait for the analysis or start from move one.');
+      if (!pick.length) { pl.showGame(true); this.on = false; this.chess = null; this.stage.idle(); $('gh-start').hidden = true; return this.fb('warn', 'No blunder positions yet. Wait for the analysis, or go back and start from move one.'); }
       const r = pick[Math.floor(Math.random() * Math.min(pick.length, 40))];
       const g = st.byId[r.gid];
       this.src = r; fen = r.fen; this.me = fen.split(' ')[1]; this.book = false; this.offset = r.ply;
       if (r.left != null) this.clk[this.me] = Math.max(15, r.left);
       const oppClk = g && r.ply > 0 ? g.moves[r.ply - 1].clk : null;
       if (oppClk != null) this.clk[this.me === 'w' ? 'b' : 'w'] = Math.max(15, oppClk);
-    } else { this.me = mode; this.book = true; }
-    st.book = C.buildBook(st.games, st.user, st.evals);
+    } else { this.me = mode; this.book = !bot; }
+    if (!bot) st.book = C.buildBook(st.games, st.user, st.evals);
+    pl.showGame(true);
     this.chess = new Chess(fen); this.on = true; this.thinking = false; this.fens = [fen]; this.mvs = [];
-    $('gh-resign').disabled = false; $('gh-start').textContent = 'New game';
-    $('gh-top-name').textContent = `Ghost (about ${this.elo})`; $('gh-bot-name').textContent = st.p ? st.p.name : 'You';
+    $('gh-resign').disabled = false; $('gh-start').hidden = true; $('gh-undo').hidden = !!bot;
+    $('gh-top-name').textContent = bot ? `${bot.name} (~${bot.elo})` : `Ghost (about ${this.elo})`; $('gh-bot-name').textContent = st.p ? st.p.name : 'You';
+    $('gh-title').innerHTML = bot ? `<b>vs ${esc(bot.name)}</b><span>${this.useClock ? mmss(base) + ' + 0' : 'No clock'} · you play ${this.me === 'w' ? 'White' : 'Black'} · no takebacks</span>` : `<b>vs The Ghost</b><span>About ${this.elo} · ${this.src ? 'from one of your blunders' : 'you play ' + (this.me === 'w' ? 'White' : 'Black')} · takebacks allowed</span>`;
     this.fb('', this.src ? `You played <strong>${esc(this.src.san)}</strong> here and it went wrong. Play it out better.` : 'Good luck.');
+    this.recordText();
     this.turnStart = performance.now();
     clearInterval(this.timer); this.timer = setInterval(() => this.tickClock(), 100);
     this.sync();
@@ -840,13 +926,13 @@ const gh = {
     }
     if (this.on && this.useClock) {
       const t = this.chess.turn();
-      if (this.live(t) <= 0) this.end(t === this.me ? 'loss' : 'win', t === this.me ? 'You ran out of time.' : 'The ghost ran out of time.');
+      if (this.live(t) <= 0) this.end(t === this.me ? 'loss' : 'win', t === this.me ? 'You ran out of time.' : `${this.oppName} ran out of time.`);
     }
   },
   moveText() {
     $('gh-moves').textContent = this.mvs.map((m, i) => { const ply = this.offset + i; return (ply % 2 === 0 ? (Math.floor(ply / 2) + 1) + '. ' : (i === 0 ? (Math.floor(ply / 2) + 1) + '… ' : '')) + m.san; }).join(' ');
     $('gh-moves').scrollTop = 1e6;
-    $('gh-undo').disabled = !this.on || !this.mvs.some(m => m.color === this.me);
+    $('gh-undo').disabled = !this.on || !!this.bot || !this.mvs.some(m => m.color === this.me);
     $('gh-undo').textContent = this.undos ? `Take back (${this.undos} used)` : 'Take back';
   },
   commit(mv) {
@@ -856,7 +942,7 @@ const gh = {
     this.mvs.push({ san: mv.san, uci: mv.from + mv.to + (mv.promotion || ''), from: mv.from, to: mv.to, piece: mv.piece, captured: mv.captured || null, color: mv.color, clk: null });
     this.fens.push(this.chess.fen());
     this.sync();
-    if (this.chess.isCheckmate()) return this.end(col === this.me ? 'win' : 'loss', col === this.me ? 'Checkmate. You beat the ghost.' : 'Checkmate. The ghost got you.'), true;
+    if (this.chess.isCheckmate()) return this.end(col === this.me ? 'win' : 'loss', col === this.me ? `Checkmate. You beat ${this.bot ? this.bot.name : 'the ghost'}.` : `Checkmate. ${this.oppName} got you.`), true;
     if (this.chess.isGameOver()) return this.end('draw', 'Draw.'), true;
     return false;
   },
@@ -871,7 +957,7 @@ const gh = {
     if (!this.commit(mv)) this.ghostMove();
   },
   takeback() {
-    if (!this.on) return;
+    if (!this.on || this.bot) return;
     // Undo back to the position before your last move. Clock time already spent stays spent.
     let n = 0;
     if (this.chess.turn() !== this.me) n = 1;            // ghost is still thinking: undo just your move
@@ -910,18 +996,24 @@ const gh = {
   end(result, msg) {
     if (!this.on) return;
     this.on = false; clearInterval(this.timer); this.gtok++;
-    const rec = pls.get('ghost', { win: 0, draw: 0, loss: 0, assisted: 0 }); rec[result]++; if (this.undos) rec.assisted = (rec.assisted || 0) + 1; pls.set('ghost', rec);
-    $('gh-resign').disabled = true;
+    if (this.bot) { const all = botRecs(), r = all[this.bot.id] || { win: 0, draw: 0, loss: 0 }; r[result]++; all[this.bot.id] = r; pls.set('bots', all); }
+    else { const rec = pls.get('ghost', { win: 0, draw: 0, loss: 0, assisted: 0 }); rec[result]++; if (this.undos) rec.assisted = (rec.assisted || 0) + 1; pls.set('ghost', rec); }
+    $('gh-resign').disabled = true; $('gh-undo').disabled = true; $('gh-start').hidden = false; pl.leaveArmed = false; $('gh-back').textContent = '‹ Opponents'; pl.render();
     let extra = '';
     if (this.src) { const g = st.byId[this.src.gid]; if (g) extra = ` The real game ended as a ${C.gameOutcome(g, this.me)}.`; }
     if (this.undos) extra += ` You used ${this.undos} takeback${this.undos > 1 ? 's' : ''}.`;
     const cls = result === 'win' ? 'good' : result === 'loss' ? 'bad' : 'warn', head = esc(msg) + esc(extra);
-    this.moveText(); this.tickClock(); ghRecord();
+    this.moveText(); this.tickClock(); this.recordText();
     this.review(cls, head);
+  },
+  recordText() {
+    const b = this.bot;
+    if (b) { const r = botRecs()[b.id] || { win: 0, draw: 0, loss: 0 }; $('gh-record').textContent = `Record against ${b.name}: ${r.win} won, ${r.draw} drawn, ${r.loss} lost`; return; }
+    const r = pls.get('ghost', { win: 0, draw: 0, loss: 0 }); $('gh-record').textContent = `Record against the ghost: ${r.win} won, ${r.draw} drawn, ${r.loss} lost` + (r.assisted ? ` (${r.assisted} with takebacks)` : '');
   },
   async review(cls, head) {
     const game = this.chess, me = this.me;
-    const fake = { id: 'ghost', white: me === 'w' ? 'you' : 'ghost', black: me === 'b' ? 'you' : 'ghost', base: null, inc: 0, moves: this.mvs.slice(), fens: this.fens.slice() };
+    const fake = { id: 'game', white: me === 'w' ? 'you' : 'bot', black: me === 'b' ? 'you' : 'bot', base: null, inc: 0, moves: this.mvs.slice(), fens: this.fens.slice() };
     if (!game) return;
     const set = (evals, marks) => this.stage.setGame({ fens: fake.fens, moves: fake.moves, evals, anchor: fake.fens.length - 1, orient: me, userColor: me, marks, offset: this.offset, anchorNote: 'final position' });
     set(null, []);
@@ -937,7 +1029,8 @@ const gh = {
     this.fb(cls, head + ` Review ready: <strong>${b}</strong> blunder${b === 1 ? '' : 's'} and <strong>${m}</strong> mistake${m === 1 ? '' : 's'} by you. Step through with the arrows, jump to a red dot on the graph, and try other moves from any position.`);
   },
 };
-function ghRecord() { const r = pls.get('ghost', { win: 0, draw: 0, loss: 0 }); $('gh-record').textContent = `Record against the ghost: ${r.win} won, ${r.draw} drawn, ${r.loss} lost` + (r.assisted ? ` (${r.assisted} with takebacks)` : ''); }
+// Called whenever records may have changed (also from markDirty).
+function ghRecord() { gh.recordText(); }
 
 
 /* ---------- History ---------- */
@@ -1485,16 +1578,17 @@ async function deleteProfile(pid) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = ['train', 'ghost', 'history', 'stats', 'improve', 'settings', 'setup'];
+const TABS = ['train', 'play', 'history', 'stats', 'improve', 'settings', 'setup'];
 function currentTab() {
-  const h = location.hash.replace('#', '');
+  let h = location.hash.replace('#', '');
+  if (h === 'ghost') h = 'play';
   if (!st.profiles.length) return 'setup';
   return TABS.includes(h) ? h : 'train';
 }
 function showTab() {
   const tab = currentTab();
   for (const t of TABS) $('view-' + t).classList.toggle('on', t === tab);
-  document.querySelectorAll('nav.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
+  document.querySelectorAll('header.top [data-tab]').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
   if (tab === 'setup') su.open();
   if (tab === 'settings') fillSettings();
   renderVisible();

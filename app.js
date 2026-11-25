@@ -56,6 +56,19 @@ function evalFor(e, stm, pov) {
 
 /* ---------- board ---------- */
 const FILES = 'abcdefgh';
+// Squares a piece could reach on an empty board. Used for premoves, which are checked
+// properly only when it is your turn (the same rule Lichess uses).
+function pseudoDests(sq, p) {
+  const f = FILES.indexOf(sq[0]), r = +sq[1] - 1, out = [];
+  const add = (df, dr) => { const nf = f + df, nr = r + dr; if (nf >= 0 && nf < 8 && nr >= 0 && nr < 8) out.push(FILES[nf] + (nr + 1)); };
+  const ray = dirs => dirs.forEach(([df, dr]) => { for (let k = 1; k < 8; k++) add(df * k, dr * k); });
+  if (p.type === 'n') [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]].forEach(([a, b]) => add(a, b));
+  if (p.type === 'b' || p.type === 'q') ray([[1, 1], [1, -1], [-1, 1], [-1, -1]]);
+  if (p.type === 'r' || p.type === 'q') ray([[1, 0], [-1, 0], [0, 1], [0, -1]]);
+  if (p.type === 'k') { for (const a of [-1, 0, 1]) for (const b of [-1, 0, 1]) if (a || b) add(a, b); if (f === 4 && r === (p.color === 'w' ? 0 : 7)) { add(2, 0); add(-2, 0); } }
+  if (p.type === 'p') { const d = p.color === 'w' ? 1 : -1; add(0, d); add(-1, d); add(1, d); if (r === (p.color === 'w' ? 1 : 6)) add(0, 2 * d); }
+  return out;
+}
 class Board {
   constructor(root) {
     this.root = root; root.classList.add('board');
@@ -63,6 +76,7 @@ class Board {
     this.last = null; this.arrow = null; this.onMove = null; this.drag = null;
     // Your own marks, drawn with the right mouse button: arrows (drag) and highlighted squares (click).
     this.marks = { arrows: new Map(), squares: new Set() }; this.rdrag = null;
+    this.premove = false; this.premoves = []; this.onPremove = null; this.onPremoveCancel = null; this.vmap = null; this.promo = null;
     root.addEventListener('contextmenu', e => e.preventDefault());
     root.addEventListener('pointerdown', e => this.down(e));
     root.addEventListener('pointermove', e => this.move(e));
@@ -76,18 +90,36 @@ class Board {
     this.movable = o.movable ?? false;
     if (fen !== this.fen) this.clearMarks();
     this.fen = fen;
-    this.last = o.last ?? null; this.arrow = o.arrow ?? null; this.sel = null; this.targets = new Map(); this.drag = null;
+    this.last = o.last ?? null; this.arrow = o.arrow ?? null; this.sel = null; this.targets = new Map(); this.drag = null; this.promo = null;
+    // Premoves: while the other side is thinking you can queue moves for this colour.
+    this.premove = o.premove || false; this.premoves = o.premoves || [];
+    this.vmap = null;
+    if (this.premove) {
+      this.vmap = new Map();
+      for (const row of this.chess.board()) for (const p of row) if (p) this.vmap.set(p.square, { type: p.type, color: p.color });
+      for (const m of this.premoves) {
+        const p = this.vmap.get(m.from); if (!p) continue;
+        this.vmap.delete(m.from);
+        if (p.type === 'k' && Math.abs(FILES.indexOf(m.to[0]) - FILES.indexOf(m.from[0])) === 2) {   // castling: bring the rook
+          const rk = m.to[0] === 'g' ? 'h' : 'a', rt = m.to[0] === 'g' ? 'f' : 'd', rp = this.vmap.get(rk + m.to[1]);
+          if (rp) { this.vmap.delete(rk + m.to[1]); this.vmap.set(rt + m.to[1], rp); }
+        }
+        this.vmap.set(m.to, m.promotion ? { type: m.promotion, color: p.color } : p);
+      }
+    }
     this.root.classList.toggle('off', !!o.dim);
     this.render();
   }
   sqAt(r, f) { return this.orient === 'w' ? FILES[f] + (8 - r) : FILES[7 - f] + (r + 1); }
   xy(sq) { const f = FILES.indexOf(sq[0]), r = +sq[1]; return this.orient === 'w' ? [f + .5, 8 - r + .5] : [7 - f + .5, r - 1 + .5]; }
+  pieceAt(sq) { return this.vmap ? this.vmap.get(sq) || null : this.chess.get(sq); }
   render() {
     const c = this.chess; let html = '';
+    const preSq = new Set(this.premoves.flatMap(m => [m.from, m.to]));
     let kingSq = null;
     if (c.isCheck()) for (const row of c.board()) for (const p of row) if (p && p.type === 'k' && p.color === c.turn()) kingSq = p.square;
     for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
-      const sq = this.sqAt(r, f), p = c.get(sq);
+      const sq = this.sqAt(r, f), p = this.pieceAt(sq);
       const dark = (FILES.indexOf(sq[0]) + +sq[1]) % 2 === 1;
       let cls = 'sq ' + (dark ? 'd' : 'l');
       if (this.last && (this.last[0] === sq || this.last[1] === sq)) cls += ' last';
@@ -95,6 +127,7 @@ class Board {
       if (this.targets.has(sq)) cls += ' tgt' + (p ? ' occ' : '');
       if (kingSq === sq) cls += ' chk';
       if (this.marks.squares.has(sq)) cls += ' mk';
+      if (preSq.has(sq)) cls += ' pre';
       html += `<div class="${cls}" data-sq="${sq}">` +
         (f === 0 ? `<span class="co r">${sq[1]}</span>` : '') + (r === 7 ? `<span class="co f">${sq[0]}</span>` : '') +
         (p ? `<svg class="pc" viewBox="0 0 40 40"><use href="#${p.color}${p.type}"/></svg>` : '') + '</div>';
@@ -115,6 +148,12 @@ class Board {
         return `<g opacity="${ghost ? .55 : .8}"><line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="#15781b" stroke-width=".16" stroke-linecap="round"/><polygon points="${x2 - ux * .1},${y2 - uy * .1} ${ex + px * .26},${ey + py * .26} ${ex - px * .26},${ey - py * .26}" fill="#15781b"/></g>`;
       }).join('') + '</svg>';
     }
+    if (this.promo) {
+      // Promotion picker: queen on the promotion square, then knight, rook and bishop toward the middle.
+      const [x, y] = this.xy(this.promo.to), col = Math.floor(x), down = Math.floor(y) === 0;
+      html += `<div class="promo" style="left:${col * 12.5}%;top:${down ? 0 : 50}%">` + (down ? ['q', 'n', 'r', 'b'] : ['b', 'r', 'n', 'q'])
+        .map(t => `<button type="button" data-promo="${t}" aria-label="Promote to ${({ q: 'queen', n: 'knight', r: 'rook', b: 'bishop' })[t]}"><svg viewBox="0 0 40 40"><use href="#${this.promo.color}${t}"/></svg></button>`).join('') + '</div>';
+    }
     this.root.innerHTML = html;
   }
   clearMarks() { if (this.marks) { this.marks.arrows.clear(); this.marks.squares.clear(); } this.rdrag = null; }
@@ -125,10 +164,23 @@ class Board {
   }
   select(sq) {
     this.sel = sq; this.targets = new Map();
-    if (sq) for (const m of this.chess.moves({ square: sq, verbose: true })) this.targets.set(m.to, m);
+    if (!sq) return;
+    if (this.premove) { const p = this.pieceAt(sq); for (const to of pseudoDests(sq, p)) this.targets.set(to, { to, premove: true, promotion: p.type === 'p' && (to[1] === '8' || to[1] === '1') ? 'q' : undefined }); }
+    else for (const m of this.chess.moves({ square: sq, verbose: true })) this.targets.set(m.to, m);
   }
-  canPick(sq) { const p = this.chess.get(sq); return this.movable && p && p.color === this.chess.turn() && (this.movable === true || this.movable === p.color); }
+  canPick(sq) {
+    const p = this.pieceAt(sq);
+    if (this.premove) return !!p && p.color === this.premove;
+    return this.movable && p && p.color === this.chess.turn() && (this.movable === true || this.movable === p.color);
+  }
   down(e) {
+    if (this.promo) {
+      e.preventDefault();
+      const b = e.target.closest('[data-promo]'), pr = this.promo; this.promo = null;
+      if (b && e.button === 0) { if (this.onMove) return this.onMove({ from: pr.from, to: pr.to, promotion: b.dataset.promo }); }
+      return this.render();
+    }
+    if (e.button === 2 && this.premoves.length && this.onPremoveCancel) { e.preventDefault(); return this.onPremoveCancel(); }
     if (e.button === 2) {
       const sq = this.sqFromEvent(e); if (!sq) return;
       e.preventDefault(); this.rdrag = { from: sq, to: sq };
@@ -146,6 +198,7 @@ class Board {
       this.drag = { from: sq, pc, x: e.clientX, y: e.clientY, moved: false };
       try { this.root.setPointerCapture(e.pointerId); } catch (err) {}
     } else if (this.sel) { this.select(null); this.render(); }
+    else if (this.premove && this.premoves.length && this.onPremoveCancel) this.onPremoveCancel();
   }
   move(e) {
     if (this.rdrag) { const sq = this.sqFromEvent(e); if (sq && sq !== this.rdrag.to) { this.rdrag.to = sq; this.render(); } return; }
@@ -175,8 +228,9 @@ class Board {
   attempt(from, to) {
     const m = this.targets.get(to);
     this.select(null);
-    const promo = m && m.promotion ? 'q' : undefined;
-    if (this.onMove) this.onMove({ from, to, promotion: promo }); else this.render();
+    if (m && m.premove) { if (this.onPremove) return this.onPremove({ from, to, promotion: m.promotion }); return this.render(); }
+    if (m && m.promotion) { this.promo = { from, to, color: m.color }; return this.render(); }   // let you pick the piece
+    if (this.onMove) this.onMove({ from, to }); else this.render();
   }
 }
 
@@ -982,7 +1036,7 @@ const pl = {
 };
 
 const gh = {
-  stage: null, chess: null, me: 'w', on: false, bot: null, oppName: 'The ghost', clk: { w: 180, b: 180 }, inc: 0, useClock: true, turnStart: 0, timer: 0, elo: 1400, book: true, src: null, plies: 0,
+  stage: null, chess: null, me: 'w', on: false, bot: null, pre: [], oppName: 'The ghost', clk: { w: 180, b: 180 }, inc: 0, useClock: true, turnStart: 0, timer: 0, elo: 1400, book: true, src: null, plies: 0,
   thinking: false, gtok: 0, fens: [], mvs: [], undos: 0, offset: 0,
   stop() {
     clearInterval(this.timer); this.gtok++; this.on = false; this.chess = null;
@@ -996,6 +1050,8 @@ const gh = {
   },
   init() {
     this.stage = new Stage($('gh-stage'), { onLiveMove: m => this.userMove(m), resetLabel: 'Back to the end' });
+    this.stage.board.onPremove = m => { if (this.on && this.chess.turn() !== this.me) { this.pre.push(m); this.sync(); } };
+    this.stage.board.onPremoveCancel = () => { this.pre = []; this.sync(); };
     $('gh-start').onclick = () => this.start();
     $('gh-resign').onclick = () => this.end('loss', 'You resigned.');
     $('gh-undo').onclick = () => this.takeback();
@@ -1069,7 +1125,9 @@ const gh = {
   },
   sync() {
     const lm = this.mvs[this.mvs.length - 1];
-    this.stage.live(this.chess.fen(), { orient: this.me, movable: this.on && this.chess.turn() === this.me ? this.me : false, last: lm ? [lm.from, lm.to] : null });
+    const mine = this.on && this.chess.turn() === this.me;
+    if (!this.on) this.pre = [];
+    this.stage.live(this.chess.fen(), { orient: this.me, movable: mine ? this.me : false, premove: this.on && !mine ? this.me : false, premoves: mine ? [] : this.pre, last: lm ? [lm.from, lm.to] : null });
     const opp = this.me === 'w' ? 'b' : 'w';
     $('gh-top-caps').innerHTML = capsHtml(this.chess, opp); $('gh-bot-caps').innerHTML = capsHtml(this.chess, this.me);
     this.moveText(); this.tickClock();
@@ -1086,7 +1144,7 @@ const gh = {
     if (this.chess.turn() !== this.me) n = 1;            // ghost is still thinking: undo just your move
     else if (this.mvs.length >= 2) n = 2;                // undo the ghost's reply and your move
     if (!n || !this.mvs.slice(-n).some(m => m.color === this.me)) return;
-    this.gtok++; this.thinking = false;
+    this.gtok++; this.thinking = false; this.pre = [];
     for (let i = 0; i < n; i++) { this.chess.undo(); this.mvs.pop(); this.fens.pop(); }
     this.plies -= n; this.undos++; this.turnStart = performance.now();
     this.fb('warn', `Move taken back. That is ${this.undos} this game, and the clock time is not refunded.`);
@@ -1097,23 +1155,42 @@ const gh = {
     const fen = game.fen();
     let uci = this.book && this.plies < 24 ? C.bookMove(st.book, fen) : null;
     if (uci) { try { new Chess(fen).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }); } catch (e) { uci = null; } }
-    const left = this.clk[game.turn()], want = this.thinkMs(left, (this.offset + this.plies) >> 1);
+    const left = this.clk[game.turn()];
+    let want = this.thinkMs(left, (this.offset + this.plies) >> 1);
+    const legal = game.moves({ verbose: true }), prev = this.mvs[this.mvs.length - 1];
+    // Moves a person makes without thinking: the only legal move, taking back a piece that was just
+    // taken, or getting out of check when there are hardly any ways to.
+    const recap = prev && prev.captured ? legal.filter(m => m.to === prev.to) : [];
+    // Also: taking a piece nobody defends, which a player sees at a glance.
+    const free = m => { if (!m || !m.captured) return false; const c = new Chess(fen); c.move(m); return !c.isAttacked(m.to, c.turn()); };
+    const simple = m => legal.length === 1 || (recap.length && m && m.to === prev.to) || (game.isCheck() && legal.length <= 3) || free(m);
     if (!uci) {
       this.book = false;
       // Stockfish's rating levels assume about a second a move, so search for up to 1.5s of the
       // pause (never longer than the pause itself); the rest of the pause is just waiting.
-      const think = Math.max(150, Math.min(1500, want * .8));
-      const legal = game.moves({ verbose: true });
+      const think = legal.length === 1 ? 0 : Math.max(150, Math.min(recap.length ? 400 : 1500, want * .8));
       const slip = this.elo < 1320 ? (1320 - this.elo) / 1320 * 0.45 : 0;
-      if (Math.random() < slip) { const x = legal[Math.floor(Math.random() * legal.length)]; uci = x.from + x.to + (x.promotion || ''); }
+      if (legal.length === 1) uci = legal[0].from + legal[0].to + (legal[0].promotion || '');
+      else if (Math.random() < slip) { const x = legal[Math.floor(Math.random() * legal.length)]; uci = x.from + x.to + (x.promotion || ''); }
       else { const r = await st.engI.play(fen, this.elo, think); uci = r.best; }
     }
     if (tok !== this.gtok || this.chess !== game || !this.on) return;
+    if (simple(legal.find(m => m.from + m.to === uci.slice(0, 4)))) want = Math.min(want, 250 + Math.random() * 650);
     await new Promise(r => setTimeout(r, Math.max(0, want - (performance.now() - t0))));
     if (tok !== this.gtok || this.chess !== game || !this.on) return;
     let mv; try { mv = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }); } catch (e) { mv = game.move(game.moves()[0]); }
     this.thinking = false;
-    this.commit(mv);
+    if (this.commit(mv)) return;
+    this.playPremove();
+  },
+  // Play your first queued premove straight away if it is legal now; otherwise drop the whole queue.
+  playPremove() {
+    if (!this.pre.length || !this.on || this.chess.turn() !== this.me) return;
+    const m = this.pre.shift();
+    let mv = null; try { mv = this.chess.move({ from: m.from, to: m.to, promotion: m.promotion || 'q' }); } catch (e) { mv = null; }
+    if (!mv) { this.pre = []; return this.sync(); }
+    if (this.useClock) this.turnStart = performance.now() - 100;   // a premove costs 0.1s, as on Lichess
+    if (!this.commit(mv)) this.ghostMove();
   },
   // How long the bot waits before moving, in ms, spread out like a person using a clock:
   // quick in the opening, about (time left / moves still to play) later, now and then a long think,
@@ -1123,8 +1200,8 @@ const gh = {
     if (!this.useClock) return moveNo < 6 ? 600 + r * 1000 : 2000 + r * 2000;
     if (left < 8) return 300 + r * 500;
     if (moveNo < 6) return 500 + r * 1100;
-    let s = left / Math.max(20, 45 - moveNo / 2) + this.inc * .8;
-    s *= .35 + Math.random() * 1.3;
+    let s = left / Math.max(25, 50 - moveNo / 2) + this.inc * .5;
+    s *= .3 + Math.random() * 1.1;
     if (Math.random() < .12) s *= 2.2;
     if (left < 20) s = Math.min(s, 1 + r);
     return Math.max(400, Math.min(s, left / 6) * 1000);

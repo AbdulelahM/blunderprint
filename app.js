@@ -61,16 +61,21 @@ class Board {
     this.root = root; root.classList.add('board');
     this.orient = 'w'; this.chess = new Chess(); this.movable = false; this.sel = null; this.targets = new Map();
     this.last = null; this.arrow = null; this.onMove = null; this.drag = null;
+    // Your own marks, drawn with the right mouse button: arrows (drag) and highlighted squares (click).
+    this.marks = { arrows: new Map(), squares: new Set() }; this.rdrag = null;
+    root.addEventListener('contextmenu', e => e.preventDefault());
     root.addEventListener('pointerdown', e => this.down(e));
     root.addEventListener('pointermove', e => this.move(e));
     root.addEventListener('pointerup', e => this.up(e));
-    root.addEventListener('pointercancel', () => { this.drag = null; this.render(); });
+    root.addEventListener('pointercancel', () => { this.drag = null; this.rdrag = null; this.render(); });
     this.render();
   }
   set(fen, o = {}) {
     this.chess = new Chess(fen);
     if (o.orient) this.orient = o.orient;
     this.movable = o.movable ?? false;
+    if (fen !== this.fen) this.clearMarks();
+    this.fen = fen;
     this.last = o.last ?? null; this.arrow = o.arrow ?? null; this.sel = null; this.targets = new Map(); this.drag = null;
     this.root.classList.toggle('off', !!o.dim);
     this.render();
@@ -89,6 +94,7 @@ class Board {
       if (this.sel === sq) cls += ' sel';
       if (this.targets.has(sq)) cls += ' tgt' + (p ? ' occ' : '');
       if (kingSq === sq) cls += ' chk';
+      if (this.marks.squares.has(sq)) cls += ' mk';
       html += `<div class="${cls}" data-sq="${sq}">` +
         (f === 0 ? `<span class="co r">${sq[1]}</span>` : '') + (r === 7 ? `<span class="co f">${sq[0]}</span>` : '') +
         (p ? `<svg class="pc" viewBox="0 0 40 40"><use href="#${p.color}${p.type}"/></svg>` : '') + '</div>';
@@ -99,7 +105,23 @@ class Board {
       const ex = x2 - ux * .32, ey = y2 - uy * .32, px = -uy, py = ux;
       html += `<svg class="arrow" viewBox="0 0 8 8"><line x1="${x1}" y1="${y1}" x2="${ex}" y2="${ey}" stroke="#f2a33a" stroke-width=".2" stroke-linecap="round" opacity=".9"/><polygon points="${x2 - ux * .05},${y2 - uy * .05} ${ex + px * .26},${ey + py * .26} ${ex - px * .26},${ey - py * .26}" fill="#f2a33a" opacity=".95"/></svg>`;
     }
+    const ar = [...this.marks.arrows.values()];
+    if (this.rdrag && this.rdrag.to && this.rdrag.to !== this.rdrag.from) ar.push([this.rdrag.from, this.rdrag.to, true]);
+    if (ar.length) {
+      html += '<svg class="marks" viewBox="0 0 8 8">' + ar.map(([a, b, ghost]) => {
+        const [x1, y1] = this.xy(a), [x2, y2] = this.xy(b);
+        const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+        const sx = x1 + ux * .25, sy = y1 + uy * .25, ex = x2 - ux * .38, ey = y2 - uy * .38, px = -uy, py = ux;
+        return `<g opacity="${ghost ? .55 : .8}"><line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="#15781b" stroke-width=".16" stroke-linecap="round"/><polygon points="${x2 - ux * .1},${y2 - uy * .1} ${ex + px * .26},${ey + py * .26} ${ex - px * .26},${ey - py * .26}" fill="#15781b"/></g>`;
+      }).join('') + '</svg>';
+    }
     this.root.innerHTML = html;
+  }
+  clearMarks() { if (this.marks) { this.marks.arrows.clear(); this.marks.squares.clear(); } this.rdrag = null; }
+  sqFromEvent(e) {
+    const rect = this.root.getBoundingClientRect();
+    const f = Math.floor((e.clientX - rect.left) / (rect.width / 8)), r = Math.floor((e.clientY - rect.top) / (rect.height / 8));
+    return f >= 0 && f < 8 && r >= 0 && r < 8 ? this.sqAt(r, f) : null;
   }
   select(sq) {
     this.sel = sq; this.targets = new Map();
@@ -107,6 +129,13 @@ class Board {
   }
   canPick(sq) { const p = this.chess.get(sq); return this.movable && p && p.color === this.chess.turn() && (this.movable === true || this.movable === p.color); }
   down(e) {
+    if (e.button === 2) {
+      const sq = this.sqFromEvent(e); if (!sq) return;
+      e.preventDefault(); this.rdrag = { from: sq, to: sq };
+      try { this.root.setPointerCapture(e.pointerId); } catch (err) {}
+      return;
+    }
+    if (e.button === 0 && (this.marks.arrows.size || this.marks.squares.size)) { this.clearMarks(); this.render(); }
     const el = e.target.closest('.sq'); if (!el) return;
     const sq = el.dataset.sq;
     if (this.sel && this.targets.has(sq)) { e.preventDefault(); return this.attempt(this.sel, sq); }
@@ -119,12 +148,19 @@ class Board {
     } else if (this.sel) { this.select(null); this.render(); }
   }
   move(e) {
+    if (this.rdrag) { const sq = this.sqFromEvent(e); if (sq && sq !== this.rdrag.to) { this.rdrag.to = sq; this.render(); } return; }
     const d = this.drag; if (!d || !d.pc) return;
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (!d.moved && Math.hypot(dx, dy) < 5) return;
     d.moved = true; d.pc.classList.add('drag'); d.pc.style.transform = `translate(${dx}px, ${dy}px)`;
   }
   up(e) {
+    if (this.rdrag) {
+      const { from } = this.rdrag, to = this.sqFromEvent(e) || this.rdrag.to; this.rdrag = null;
+      if (to === from) { this.marks.squares.has(from) ? this.marks.squares.delete(from) : this.marks.squares.add(from); }
+      else { const k = from + to; this.marks.arrows.has(k) ? this.marks.arrows.delete(k) : this.marks.arrows.set(k, [from, to]); }
+      return this.render();
+    }
     const d = this.drag; if (!d) return;
     this.drag = null;
     if (!d.moved) return;
@@ -694,20 +730,26 @@ const pz = {
   },
 };
 
-/* ---------- Train: speed drill ---------- */
+/* ---------- Train: Rush ---------- */
+// 3 minutes on the clock, 3 strikes. Positions come from your own games in random order,
+// and any move that keeps most of your winning chances counts (the old Speed drill rule).
+const RUSH_SECS = 180, RUSH_STRIKES = 3;
 const dr = {
-  stage: null, rec: null, running: false, live: false, streak: 0, t0: 0, raf: 0, seen: new Set(),
-  stats: { n: 0, ok: 0, time: 0 },
-  get budget() { return pls.get('budget', 10); },
-  set budget(v) { pls.set('budget', v); },
+  stage: null, rec: null, state: 'idle', live: false, t0: 0, raf: 0, order: [], at: 0,
+  score: 0, strikes: 0, tried: 0, log: [], missed: [], tok: 0,
+  get best() { return pls.get('rushbest', 0); },
   init() {
     this.stage = new Stage($('dr-stage'), { onMove: x => this.answer(x) });
-    $('dr-start').onclick = () => { if (this.running && !this.live) this.next(); else if (!this.running) { this.running = true; this.stats = { n: 0, ok: 0, time: 0 }; this.next(); } };
-    $('dr-stop').onclick = () => this.stop();
+    $('dr-start').onclick = () => this.start();
+    $('dr-stop').onclick = () => this.finishRun('You ended the run');
+    $('dr-sum').onclick = e => {
+      if (e.target.closest('[data-again]')) return this.start();
+      const t = e.target.closest('[data-try]'); if (t) { const m = this.missed[+t.dataset.try]; if (m) this.practice(m.r); }
+    };
     this.idle();
   },
-  reset() { this.stop(); this.seen = new Set(); this.streak = 0; },
-  poke() { if (!this.running) this.idle(); },
+  reset() { this.stop(); },
+  poke() { if (this.state === 'idle') this.idle(); },
   pool() {
     const S = st.S; if (!S) return [];
     const m = new Map();
@@ -715,79 +757,126 @@ const dr = {
     for (const r of S.puzzles) if (st.byId[r.gid]) m.set(r.gid + ':' + r.ply, r);
     return [...m.values()];
   },
-  idle() {
-    cancelAnimationFrame(this.raf); this.live = false;
-    const n = this.pool().length;
-    this.stage.idle();
-    $('dr-clock').textContent = fmt1(this.budget) + 's';
-    $('dr-timer').querySelector('i').style.transform = 'scaleX(1)'; $('dr-timer').classList.remove('low');
-    $('dr-start').textContent = 'Start'; $('dr-start').disabled = !n;
-    $('dr-info').hidden = true;
-    this.fb('', n ? `${n} positions ready. Press Start when you are ready.` : 'Positions appear here as your games are analysed.');
-    this.count();
-  },
-  stop() { this.running = false; this.rec = null; this.idle(); },
-  startWith(r) { setTrainMode('dr'); this.running = true; this.next(r); },
-  count() { const s = this.stats; $('dr-count').textContent = `Timer ${fmt1(this.budget)}s · streak ${this.streak}` + (s.n ? ` · ${s.ok} of ${s.n} passed · ${fmt1(s.time / s.n)}s average` : ''); },
   fb(cls, html) { const el = $('dr-fb'); el.className = 'fb ' + cls; el.innerHTML = html; },
-  next(force) {
-    const pool = this.pool(); if (!pool.length) return this.stop();
-    let cand = pool.filter(r => !this.seen.has(r.gid + ':' + r.ply));
-    if (!cand.length) { this.seen = new Set(); cand = pool; }
-    const r = force || cand[Math.floor(Math.random() * cand.length)];
-    this.seen.add(r.gid + ':' + r.ply);
+  view(play) { $('dr-play').hidden = !play; $('dr-sum').hidden = play; $('dr-panel').classList.toggle('run', this.state === 'run'); $('dr-head').hidden = $('dr-log').hidden = this.state === 'practice'; },
+  bestText() { const b = this.best, el = $('dr-best'); el.innerHTML = b ? `Best <b>${b}</b>` : ''; el.hidden = !b || st.trainMode !== 'dr'; },
+  head() {
+    $('dr-score').textContent = this.score;
+    $('dr-strikes').innerHTML = 'Strikes ' + Array.from({ length: RUSH_STRIKES }, (_, i) => `<i class="${i < this.strikes ? 'x' : ''}">✕</i>`).join('');
+    $('dr-log').innerHTML = this.log.map(ok => `<span class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✕'}</span>`).join('');
+  },
+  clockText(left) {
+    $('dr-clock').textContent = mmss(Math.ceil(Math.max(0, left)));
+    $('dr-clock').classList.toggle('low', left < 20);
+    $('dr-timer').querySelector('i').style.transform = `scaleX(${Math.max(0, left / RUSH_SECS)})`;
+  },
+  idle() {
+    cancelAnimationFrame(this.raf); this.live = false; this.state = 'idle'; this.tok++;
+    const n = this.pool().length;
+    this.view(true); this.stage.idle();
+    this.score = 0; this.strikes = 0; this.log = []; this.head(); this.clockText(RUSH_SECS);
+    $('dr-ask').innerHTML = 'Rush<small>3 minutes. Solve as many of your own positions as you can. Any solid move counts. Three wrong moves and the run is over.</small>';
+    $('dr-start').textContent = 'Start'; $('dr-start').hidden = false; $('dr-start').disabled = !n; $('dr-stop').hidden = true;
+    $('dr-info').hidden = true;
+    this.fb('', n ? `${n} positions ready.${this.best ? ` Your best is ${this.best}.` : ''}` : 'Positions appear here as your games are analysed.');
+    this.bestText();
+  },
+  stop() { this.rec = null; this.idle(); },
+  start() {
+    const pool = this.pool(); if (!pool.length) return this.idle();
+    this.order = pool.map(r => [Math.random(), r]).sort((a, b) => a[0] - b[0]).map(x => x[1]); this.at = 0;
+    this.state = 'run'; this.score = 0; this.strikes = 0; this.tried = 0; this.log = []; this.missed = [];
+    this.view(true); this.head(); this.fb('', ''); window.scrollTo(0, 0);
+    $('dr-start').hidden = true; $('dr-stop').hidden = false; $('dr-info').hidden = true;
+    this.t0 = performance.now(); this.next(); this.tick();
+  },
+  left() { return RUSH_SECS - (performance.now() - this.t0) / 1000; },
+  next() {
+    if (this.at >= this.order.length) { this.at = 0; this.order.sort(() => Math.random() - .5); }
+    const r = this.order[this.at++];
     this.rec = r; this.live = true;
     const col = r.fen.split(' ')[1], g = st.byId[r.gid];
-    this.stage.setGame({ fens: g.fens, moves: g.moves, evals: st.evals[g.id], anchor: r.ply, orient: col, userColor: col, marks: badPlies(st.analysis[g.id]), anchorNote: 'the drill position', quiet: true });
-    $('dr-info').hidden = true;
-    this.fb('', `${col === 'w' ? 'White' : 'Black'} to move. Go.`);
-    $('dr-start').textContent = 'Next'; $('dr-start').disabled = true;
-    this.t0 = performance.now(); this.tick();
+    this.stage.setGame({ fens: g.fens, moves: g.moves, evals: st.evals[g.id], anchor: r.ply, orient: col, userColor: col, marks: badPlies(st.analysis[g.id]), anchorNote: 'the rush position', quiet: true });
+    const opp = oppOf(g, C.userColor(g, st.user));
+    $('dr-ask').innerHTML = `${col === 'w' ? 'White' : 'Black'} to move. Find a solid move.<small>From your game vs ${esc(opp.name)}, ${shortDate(g.date)}</small>`;
   },
   tick() {
-    if (!this.live) return;
-    const el = (performance.now() - this.t0) / 1000, left = this.budget - el;
-    $('dr-clock').textContent = fmt1(Math.max(0, left)) + 's';
-    $('dr-timer').querySelector('i').style.transform = `scaleX(${Math.max(0, left / this.budget)})`;
-    $('dr-timer').classList.toggle('low', left < this.budget * 0.3);
-    if (left <= 0) return this.finish(false, null, 'Out of time.');
+    if (this.state !== 'run') return;
+    const left = this.left(); this.clockText(left);
+    if (left <= 0) return this.finishRun('Time is up');
     this.raf = requestAnimationFrame(() => this.tick());
+  },
+  // Same rule as before: the engine's move, or any move that loses less than 7 points of win chance.
+  async judge(r, mv, after) {
+    if (mv.from + mv.to === r.best.slice(0, 4)) return { ok: true };
+    if (!st.engI) return { ok: false, loss: null };
+    const t = C.terminalEval(after);
+    const e = t ? (t.lost ? { mate: -1 } : { cp: 0, mate: null }) : await st.engI.analyse(after, st.depth);
+    const loss = r.wpB - (100 - C.winPct(e));
+    return { ok: loss < 7, loss };
   },
   async answer({ first, after, mv }) {
     const r = this.rec; if (!r || !this.live || !first) return;
-    const took = (performance.now() - this.t0) / 1000;
-    this.live = false; cancelAnimationFrame(this.raf);
-    if (mv.from + mv.to === r.best.slice(0, 4)) return this.finish(true, took, `<strong>${esc(mv.san)}</strong> is the engine's choice.`);
-    if (!st.engI) return this.finish(false, took, `Not the engine move, and the engine is not running to check it.`);
+    if (this.state === 'practice') return this.answerPractice(r, mv, after);
+    this.live = false; const tok = this.tok;
     this.fb('', 'Checking…');
-    const t = C.terminalEval(after);
-    const e = t ? (t.lost ? { mate: -1 } : { cp: 0, mate: null }) : await st.engI.analyse(after, st.depth);
-    if (this.rec !== r) return;
-    const loss = r.wpB - (100 - C.winPct(e));
-    if (loss < 7) this.finish(true, took, `<strong>${esc(mv.san)}</strong> is solid.`);
-    else this.finish(false, took, `<strong>${esc(mv.san)}</strong> gives up about ${Math.round(loss)} points of win chance.`);
+    const v = await this.judge(r, mv, after);
+    if (tok !== this.tok || this.state !== 'run') return;
+    this.tried++; this.log.push(v.ok);
+    if (v.ok) { this.score++; this.fb('good', `<strong>${esc(mv.san)}</strong> ✓`); }
+    else { this.strikes++; this.missed.push({ r, san: mv.san }); this.fb('bad', `<strong>${esc(mv.san)}</strong> ✕ · better was <strong>${esc(sanOf(r.fen, r.best))}</strong>`); }
+    this.head();
+    if (this.strikes >= RUSH_STRIKES) return this.finishRun('Three strikes');
+    setTimeout(() => { if (tok === this.tok && this.state === 'run') this.next(); }, v.ok ? 250 : 900);
   },
-  finish(ok, took, msg) {
-    const r = this.rec, s = this.stage; this.live = false; cancelAnimationFrame(this.raf);
-    this.stats.n++; if (ok) { this.stats.ok++; this.streak++; } else this.streak = 0;
-    this.stats.time += took ?? this.budget;
-    if (ok && this.streak > 0 && this.streak % 3 === 0) this.budget = Math.max(3, this.budget - 1);
-    if (!ok) this.budget = Math.min(12, this.budget + 1);
-    s.quiet = false;
-    if (!ok) { s.vari = []; s.idx = s.main.anchor; s.arrow = [r.best.slice(0, 2), r.best.slice(2, 4)]; }
+  finishRun(why) {
+    if (this.state !== 'run') return;
+    cancelAnimationFrame(this.raf); this.live = false; this.state = 'done'; this.tok++;
+    const used = Math.min(RUSH_SECS, (performance.now() - this.t0) / 1000), old = this.best, isBest = this.score > old;
+    if (isBest) pls.set('rushbest', this.score);
+    const runs = pls.get('rushruns', []); runs.push({ at: Date.now(), score: this.score, tried: this.tried }); pls.set('rushruns', runs.slice(-200));
+    this.view(false);
+    const per = this.tried ? fmt1(used / this.tried) + 's' : '–';
+    const badge = isBest && old ? `<span class="nb">New best! Old best ${old}</span>` : isBest && this.score ? '<span class="nb">First best score</span>' : `<span class="ob">Best ${old}</span>`;
+    const misses = this.missed.map((m, i) => {
+      const g = st.byId[m.r.gid], opp = g ? oppOf(g, C.userColor(g, st.user)).name : '';
+      return `<div class="mi"><div class="mb" data-mini="${i}"></div><div><b>You played <span class="mv">${esc(m.san)}</span></b><span>Better was <span class="bm">${esc(sanOf(m.r.fen, m.r.best))}</span>${g ? ` · vs ${esc(opp)}, ${shortDate(g.date)}` : ''}</span></div><button class="btn quiet" type="button" data-try="${i}">Try again</button></div>`;
+    }).join('');
+    $('dr-sum').innerHTML = `<div class="rscore"><span class="lb">Rush · 3 minutes · ${esc(why)}</span><b>${this.score}</b>${badge}
+      <div class="st"><span><b>${this.tried}</b>tried</span><span><b>${this.strikes}</b>strikes</span><span><b>${per}</b>per position</span></div>
+      <div class="btns" style="margin-top:14px"><button class="btn primary big" type="button" data-again>Go again</button></div></div>
+      <div><div class="h2">${this.missed.length ? 'Missed this run' : 'No misses this run'}</div><div class="miss">${misses}</div></div>`;
+    this.missed.forEach((m, i) => { const el = $('dr-sum').querySelector(`[data-mini="${i}"]`); const b = new Board(el); b.set(m.r.fen, { orient: m.r.fen.split(' ')[1], arrow: [m.r.best.slice(0, 2), m.r.best.slice(2, 4)] }); });
+    this.bestText();
+  },
+  // One position with no clock: from "Try again" after a run, or from a time sink in Stats.
+  practice(r) {
+    cancelAnimationFrame(this.raf); this.tok++;
+    this.state = 'practice'; this.rec = r; this.live = true;
+    this.view(true);
+    const col = r.fen.split(' ')[1], g = st.byId[r.gid];
+    this.stage.setGame({ fens: g.fens, moves: g.moves, evals: st.evals[g.id], anchor: r.ply, orient: col, userColor: col, marks: badPlies(st.analysis[g.id]), anchorNote: 'the position', quiet: true });
+    $('dr-ask').innerHTML = `${col === 'w' ? 'White' : 'Black'} to move. Find a solid move.<small>No clock on this one.</small>`;
+    $('dr-start').textContent = 'Start a rush'; $('dr-start').hidden = false; $('dr-start').disabled = false; $('dr-stop').hidden = true; $('dr-info').hidden = true;
+    this.fb('', 'Take your time.');
+  },
+  startWith(r) { setTrainMode('dr'); this.practice(r); },
+  async answerPractice(r, mv, after) {
+    this.live = false; this.fb('', 'Checking…');
+    const v = await this.judge(r, mv, after); if (this.rec !== r || this.state !== 'practice') return;
+    const s = this.stage; s.quiet = false;
+    if (!v.ok) { s.vari = []; s.idx = s.main.anchor; s.arrow = [r.best.slice(0, 2), r.best.slice(2, 4)]; }
     s.show();
-    this.fb(ok ? 'good' : 'bad', `${msg}${took != null ? ` You took ${fmt1(took)}s.` : ''} Engine: <strong>${esc(sanOf(r.fen, r.best))}</strong>. The board is free now: try other moves or press Next.`);
+    this.fb(v.ok ? 'good' : 'bad', (v.ok ? `<strong>${esc(mv.san)}</strong> works.` : `<strong>${esc(mv.san)}</strong> ${v.loss != null ? `gives up about ${Math.round(v.loss)} points of win chance.` : 'is not the engine move.'}`) + ` Engine: <strong>${esc(sanOf(r.fen, r.best))}</strong>. The board is free now.`);
     $('dr-info').innerHTML = infoCard(r, true); $('dr-info').hidden = false;
-    $('dr-start').disabled = false; $('dr-start').textContent = 'Next';
-    this.count();
   },
 };
-
 function setTrainMode(m) {
   st.trainMode = m;
-  document.querySelectorAll('#view-train .seg button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  document.querySelectorAll('#view-train [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
   $('pz-panel').hidden = m !== 'pz'; $('dr-panel').hidden = m !== 'dr'; $('pz-filter').hidden = $('pz-order').hidden = m !== 'pz';
-  if (m === 'pz' && dr.live) dr.stop();
+  if (m === 'pz' && dr.state !== 'idle') dr.stop();
+  dr.bestText();
   if (location.hash !== '#train') location.hash = '#train';
 }
 function initTrain() {
@@ -810,17 +899,49 @@ const STAR8 = '<svg width="0" height="0" style="position:absolute" aria-hidden="
 const LAUREL = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20c-4-1-7-4.5-7-9M12 20c4-1 7-4.5 7-9M5 11c1.5 0 3 1 3.5 2.5M19 11c-1.5 0-3 1-3.5 2.5M6 6.5c1.3.3 2.4 1.3 2.7 2.7M18 6.5c-1.3.3-2.4 1.3-2.7 2.7"/></svg>';
 const GHOST_SVG = '<svg class="pc2" viewBox="0 0 24 24" style="filter:none"><path d="M6 21V11a6 6 0 1 1 12 0v10l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5z" fill="#ecedd1" stroke="#302e2b" stroke-width="1.2"/><circle cx="10" cy="11.5" r="1.1" fill="#302e2b"/><circle cx="14" cy="11.5" r="1.1" fill="#302e2b"/></svg>';
 const botRecs = () => pls.get('bots', {});
+// Time controls up to 10 minutes, as [minutes, seconds added per move].
+const TC_GROUPS = [['Bullet', [[1, 0], [1, 1], [2, 1]]], ['Blitz', [[3, 0], [3, 2], [5, 0], [5, 3]]], ['Rapid', [[10, 0], [10, 5]]]];
+// A small clock face: the filled part is the minutes out of 10.
+function tcDial(min) {
+  const f = min / 10, a = 2 * Math.PI * f - Math.PI / 2, x = (8 + 6 * Math.cos(a)).toFixed(2), y = (8 + 6 * Math.sin(a)).toFixed(2);
+  const fill = f >= 1 ? '<circle cx="8" cy="8" r="6" fill="currentColor"/>' : `<path d="M8 8 L8 2 A6 6 0 ${f > .5 ? 1 : 0} 1 ${x} ${y} Z" fill="currentColor"/>`;
+  return `<svg class="dl" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".45"/>${fill}</svg>`;
+}
+const tcLabel = tc => tc === '0' ? 'No clock' : tc.replace('+', ' + ');
+const PVAL = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+// What each side has taken, worked out from the pieces left on the board.
+function capsHtml(chess, taker) {
+  const left = { w: { p: 0, n: 0, b: 0, r: 0, q: 0 }, b: { p: 0, n: 0, b: 0, r: 0, q: 0 } };
+  for (const row of chess.board()) for (const p of row) if (p && p.type !== 'k') left[p.color][p.type]++;
+  const start = { p: 8, n: 2, b: 2, r: 2, q: 1 }, victim = taker === 'w' ? 'b' : 'w';
+  const mat = c => Object.entries(left[c]).reduce((t, [k, n]) => t + PVAL[k] * n, 0), adv = mat(taker) - mat(victim);
+  let h = '';
+  for (const k of 'pnbrq') { const n = Math.max(0, start[k] - left[victim][k]); if (n) h += '<span class="cg">' + `<svg viewBox="0 0 40 40"><use href="#${victim}${k}"/></svg>`.repeat(n) + '</span>'; }
+  return h + (adv > 0 ? `<em>+${adv}</em>` : '');
+}
 
 const pl = {
-  sel: 'adli', tc: 300, col: 'r', leaveArmed: false,
+  sel: 'adli', tc: '3+2', col: 'r', leaveArmed: false,
   init() {
     $('pl-bots').onclick = e => { const b = e.target.closest('[data-bot]'); if (b) this.pick(b.dataset.bot); };
-    $('pl-tc').onclick = e => { const b = e.target.closest('[data-v]'); if (b) { this.tc = +b.dataset.v; pls.set('pltc', this.tc); this.bar(); } };
+    $('pl-tc').onclick = e => { const b = e.target.closest('[data-tc]'); if (b) { this.tc = b.dataset.tc; pls.set('pltc2', this.tc); this.bar(); } };
     $('pl-col').onclick = e => { const b = e.target.closest('[data-v]'); if (b) { this.col = b.dataset.v; pls.set('plcol', this.col); this.bar(); } };
     $('pl-go').onclick = () => gh.start();
     $('gh-back').onclick = () => this.back();
   },
-  load() { this.sel = pls.get('plbot', 'adli'); this.tc = pls.get('pltc', 300); this.col = pls.get('plcol', 'r'); this.render(); },
+  load() {
+    this.sel = pls.get('plbot', 'adli'); this.col = pls.get('plcol', 'r');
+    const old = pls.get('pltc', null);   // v6 kept seconds only
+    this.tc = pls.get('pltc2', old == null ? '3+2' : old ? `${old / 60}+0` : '0');
+    this.render();
+  },
+  get base() { return this.tc === '0' ? 0 : +this.tc.split('+')[0] * 60; },
+  get inc() { return this.tc === '0' ? 0 : +this.tc.split('+')[1]; },
+  tcHtml() {
+    const b = (key, inner) => `<button type="button" class="tcb${this.tc === key ? ' on' : ''}" data-tc="${key}" aria-pressed="${this.tc === key}">${inner}</button>`;
+    return TC_GROUPS.map(([name, list]) => `<div class="tg"><span class="tgl">${name}</span><div class="tgc">` + list.map(([m, i]) => b(`${m}+${i}`, `${tcDial(m)}<b>${m}</b><span>+${i}</span>`)).join('') + '</div></div>').join('')
+      + `<div class="tg"><span class="tgl">Relaxed</span><div class="tgc">${b('0', '<svg class="dl" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8c1.5-2.5 3.5-2.5 5 0s3.5 2.5 5 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><b>No</b><span>clock</span>')}</div></div>`;
+  },
   cur() { return BOTS.find(b => b.id === this.sel) || null; },
   pick(id) { this.sel = id; pls.set('plbot', id); this.render(); },
   render() {
@@ -844,10 +965,10 @@ const pl = {
   },
   bar() {
     const b = this.cur(), isG = !b;
-    $('pl-bar').style.setProperty('--c1', isG ? GHOST_CARD.c1 : b.c1);
+    $('pl-bar').style.setProperty('--c1', isG ? GHOST_CARD.c1 : b.c1); $('pl-bar').style.setProperty('--c2', isG ? GHOST_CARD.c2 : b.c2);
+    $('pl-tc').innerHTML = this.tcHtml();
     $('pl-vs').innerHTML = isG ? 'vs The Ghost' : `vs ${esc(b.name)} <b>~${b.elo}</b>`;
     $('pl-bot-opts').hidden = isG; $('pl-gh-opts').hidden = !isG;
-    document.querySelectorAll('#pl-tc button').forEach(x => x.classList.toggle('on', +x.dataset.v === this.tc));
     document.querySelectorAll('#pl-col button').forEach(x => x.classList.toggle('on', x.dataset.v === this.col));
   },
   showGame(on) { $('pl-pick').hidden = on; $('pl-game').hidden = !on; this.leaveArmed = false; $('gh-back').textContent = '‹ Opponents'; if (on) window.scrollTo(0, 0); },
@@ -861,14 +982,14 @@ const pl = {
 };
 
 const gh = {
-  stage: null, chess: null, me: 'w', on: false, bot: null, oppName: 'The ghost', clk: { w: 180, b: 180 }, useClock: true, turnStart: 0, timer: 0, elo: 1400, book: true, src: null, plies: 0,
+  stage: null, chess: null, me: 'w', on: false, bot: null, oppName: 'The ghost', clk: { w: 180, b: 180 }, inc: 0, useClock: true, turnStart: 0, timer: 0, elo: 1400, book: true, src: null, plies: 0,
   thinking: false, gtok: 0, fens: [], mvs: [], undos: 0, offset: 0,
   stop() {
     clearInterval(this.timer); this.gtok++; this.on = false; this.chess = null;
     if (!this.stage) return;
     this.stage.idle();
     $('gh-resign').disabled = true; $('gh-undo').disabled = true; $('gh-start').hidden = true;
-    $('gh-moves').textContent = ''; $('gh-top-clk').textContent = '3:00'; $('gh-bot-clk').textContent = '3:00';
+    $('gh-moves').textContent = ''; $('gh-top-clk').textContent = '3:00'; $('gh-bot-clk').textContent = '3:00'; $('gh-top-caps').innerHTML = ''; $('gh-bot-caps').innerHTML = '';
     ['gh-top-clk', 'gh-bot-clk'].forEach(id => $(id).classList.remove('on', 'low'));
     this.fb('', '');
     pl.showGame(false);
@@ -886,8 +1007,8 @@ const gh = {
     if (!st.engI) { pl.showGame(true); this.fb('bad', 'The chess engine is still starting or cannot run on this device. Try again in a moment.'); return; }
     const mode = bot ? (pl.col === 'r' ? (Math.random() < .5 ? 'w' : 'b') : pl.col) : $('gh-mode').value;
     this.bot = bot; this.oppName = bot ? bot.name : 'The ghost';
-    this.elo = bot ? bot.elo : +$('gh-elo').value; this.useClock = bot ? pl.tc > 0 : $('gh-clock').checked; this.src = null; this.plies = 0; this.undos = 0; this.offset = 0; this.gtok++;
-    const base = bot ? (pl.tc || 300) : (st.games[0]?.base || 180);
+    this.elo = bot ? bot.elo : +$('gh-elo').value; this.useClock = pl.base > 0; this.inc = pl.inc; this.src = null; this.plies = 0; this.undos = 0; this.offset = 0; this.gtok++;
+    const base = pl.base || 300;
     this.clk = { w: base, b: base };
     let fen = new Chess().fen();
     if (!bot && mode === 'worst') {
@@ -906,7 +1027,7 @@ const gh = {
     this.chess = new Chess(fen); this.on = true; this.thinking = false; this.fens = [fen]; this.mvs = [];
     $('gh-resign').disabled = false; $('gh-start').hidden = true; $('gh-undo').hidden = !!bot;
     $('gh-top-name').textContent = bot ? `${bot.name} (~${bot.elo})` : `Ghost (about ${this.elo})`; $('gh-bot-name').textContent = st.p ? st.p.name : 'You';
-    $('gh-title').innerHTML = bot ? `<b>vs ${esc(bot.name)}</b><span>${this.useClock ? mmss(base) + ' + 0' : 'No clock'} · you play ${this.me === 'w' ? 'White' : 'Black'} · no takebacks</span>` : `<b>vs The Ghost</b><span>About ${this.elo} · ${this.src ? 'from one of your blunders' : 'you play ' + (this.me === 'w' ? 'White' : 'Black')} · takebacks allowed</span>`;
+    $('gh-title').innerHTML = bot ? `<b>vs ${esc(bot.name)}</b><span>${tcLabel(pl.tc)} · you play ${this.me === 'w' ? 'White' : 'Black'} · no takebacks</span>` : `<b>vs The Ghost</b><span>About ${this.elo} · ${tcLabel(pl.tc)} · ${this.src ? 'from one of your blunders' : 'you play ' + (this.me === 'w' ? 'White' : 'Black')} · takebacks allowed</span>`;
     this.fb('', this.src ? `You played <strong>${esc(this.src.san)}</strong> here and it went wrong. Play it out better.` : 'Good luck.');
     this.recordText();
     this.turnStart = performance.now();
@@ -937,7 +1058,7 @@ const gh = {
   },
   commit(mv) {
     const col = mv.color;
-    if (this.useClock) this.clk[col] -= (performance.now() - this.turnStart) / 1000;
+    if (this.useClock) this.clk[col] -= (performance.now() - this.turnStart) / 1000 - this.inc;
     this.turnStart = performance.now(); this.plies++;
     this.mvs.push({ san: mv.san, uci: mv.from + mv.to + (mv.promotion || ''), from: mv.from, to: mv.to, piece: mv.piece, captured: mv.captured || null, color: mv.color, clk: null });
     this.fens.push(this.chess.fen());
@@ -949,6 +1070,8 @@ const gh = {
   sync() {
     const lm = this.mvs[this.mvs.length - 1];
     this.stage.live(this.chess.fen(), { orient: this.me, movable: this.on && this.chess.turn() === this.me ? this.me : false, last: lm ? [lm.from, lm.to] : null });
+    const opp = this.me === 'w' ? 'b' : 'w';
+    $('gh-top-caps').innerHTML = capsHtml(this.chess, opp); $('gh-bot-caps').innerHTML = capsHtml(this.chess, this.me);
     this.moveText(); this.tickClock();
   },
   userMove(m) {
@@ -974,24 +1097,37 @@ const gh = {
     const fen = game.fen();
     let uci = this.book && this.plies < 24 ? C.bookMove(st.book, fen) : null;
     if (uci) { try { new Chess(fen).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }); } catch (e) { uci = null; } }
-    const left = this.clk[game.turn()];
+    const left = this.clk[game.turn()], want = this.thinkMs(left, (this.offset + this.plies) >> 1);
     if (!uci) {
       this.book = false;
-      // Real thinking time: Stockfish's rating levels assume about a second a move, so a short
-      // search plays far below the slider. Keep enough in hand not to flag in fast games.
-      const think = this.useClock ? Math.max(150, Math.min(1500, left * 1000 / 30)) : 1200;
+      // Stockfish's rating levels assume about a second a move, so search for up to 1.5s of the
+      // pause (never longer than the pause itself); the rest of the pause is just waiting.
+      const think = Math.max(150, Math.min(1500, want * .8));
       const legal = game.moves({ verbose: true });
       const slip = this.elo < 1320 ? (1320 - this.elo) / 1320 * 0.45 : 0;
       if (Math.random() < slip) { const x = legal[Math.floor(Math.random() * legal.length)]; uci = x.from + x.to + (x.promotion || ''); }
       else { const r = await st.engI.play(fen, this.elo, think); uci = r.best; }
     }
     if (tok !== this.gtok || this.chess !== game || !this.on) return;
-    const want = this.useClock ? Math.min(left * 1000 / 12, 350 + Math.random() * (left < 20 ? 500 : 1700)) : 350;
     await new Promise(r => setTimeout(r, Math.max(0, want - (performance.now() - t0))));
     if (tok !== this.gtok || this.chess !== game || !this.on) return;
     let mv; try { mv = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }); } catch (e) { mv = game.move(game.moves()[0]); }
     this.thinking = false;
     this.commit(mv);
+  },
+  // How long the bot waits before moving, in ms, spread out like a person using a clock:
+  // quick in the opening, about (time left / moves still to play) later, now and then a long think,
+  // and fast when short of time. Every move gets a pause, deliberate weak moves included.
+  thinkMs(left, moveNo) {
+    const r = Math.random();
+    if (!this.useClock) return moveNo < 6 ? 600 + r * 1000 : 2000 + r * 2000;
+    if (left < 8) return 300 + r * 500;
+    if (moveNo < 6) return 500 + r * 1100;
+    let s = left / Math.max(20, 45 - moveNo / 2) + this.inc * .8;
+    s *= .35 + Math.random() * 1.3;
+    if (Math.random() < .12) s *= 2.2;
+    if (left < 20) s = Math.min(s, 1 + r);
+    return Math.max(400, Math.min(s, left / 6) * 1000);
   },
   end(result, msg) {
     if (!this.on) return;
@@ -1066,7 +1202,7 @@ const hv = {
       const acc = recs ? C.accuracyOf(recs) : null, bl = recs ? recs.filter(r => r.sev === 'blunder').length : null;
       return `<button type="button" class="grow-row" data-g="${esc(g.id)}">
         <span class="stripe ${out}"></span>
-        <span class="when">${usDate(g.date)}<br>${esc(g.tcLabel)}</span>
+        <span class="when">${String(g.date || '').slice(0, 4) === String(new Date().getFullYear()) ? shortDate(g.date) : usDate(g.date)}<br>${esc(g.tcLabel)}</span>
         <span class="vs"><b><i class="cdot ${col}"></i>${esc(opp.name)}${opp.elo ? ' <span style="display:inline;color:var(--dim)">(' + opp.elo + ')</span>' : ''}</b><span>${esc(C.resultText(g, col))} · ${esc(C.openingFamily(g.opening))}</span></span>
         <span class="acc">${acc != null ? Math.round(acc) + '%' : '–'}<span>${acc != null ? 'accuracy' : 'not analysed'}</span></span>
         <span class="bl">${bl != null ? `<b>${bl}</b> ${bl === 1 ? 'blunder' : 'blunders'}` : ''}</span>
@@ -1300,7 +1436,7 @@ function statsClock() {
       const g = st.byId[r.gid], opp2 = g ? oppOf(g, r.fen.split(' ')[1]).name : '';
       const tag = r.sev === 'blunder' || r.sev === 'mistake' ? `<span class="tag bad">${r.sev}</span>` : `<span class="tag good">fine move</span>`;
       return `<button type="button" data-sink="${i}"><span class="sec">${Math.round(r.spent)}s</span><span>${g ? usDate(g.date) + ' · ' : ''}move ${Math.floor(r.ply / 2) + 1}, ${esc(r.san)} vs ${esc(opp2)}</span>${tag}</button>`;
-    }).join('')}</div><p class="note">Tap one to drill it against the timer.</p></div>` : ''}
+    }).join('')}</div><p class="note">Tap one to practise it.</p></div>` : ''}
   </section>`;
 }
 
@@ -1389,7 +1525,7 @@ function renderImprove() {
       if (S.lostOnTime) ev.push(`<strong>${S.lostOnTime}</strong> of ${S.loss} losses on time` + (S.flaggedWinning ? `, ${S.flaggedWinning} from a better position` : ''));
       return `<div class="card fix"><div class="rank">${i + 1}</div><div><h2>The clock</h2><p class="ev">${ev.join(' · ')}</p>
         <p class="tipp">Time is costing you games that the board was not. Play your opening moves from memory without stopping, and when two moves both look fine, play the first safe one. A good move now beats the best move with ten seconds left. Give yourself a hard cap: no single move over 10 seconds before move 15.</p>
-        <div class="btns"><a class="btn primary" href="#train" data-go="dr">Speed drill</a><a class="btn" href="${LI}/storm" target="_blank" rel="noopener">Lichess Puzzle Storm</a><a class="btn" href="${LI}/racer" target="_blank" rel="noopener">Lichess Puzzle Racer</a></div></div></div>`;
+        <div class="btns"><a class="btn primary" href="#train" data-go="dr">Rush</a><a class="btn" href="${LI}/storm" target="_blank" rel="noopener">Lichess Puzzle Storm</a><a class="btn" href="${LI}/racer" target="_blank" rel="noopener">Lichess Puzzle Racer</a></div></div></div>`;
     }
     const h = CAT_HELP[w.key];
     return `<div class="card fix"><div class="rank">${i + 1}</div><div><h2>${esc(h.title)}</h2><p class="ev"><strong>${w.n}</strong> of ${w.total} blunders and mistakes (${Math.round(100 * w.score)}%) in ${S.analysed} games</p>
@@ -1415,7 +1551,7 @@ function renderImprove() {
   const blocks = [
     [10, 'Warm up on Lichess', `${h.links[0][0]}. Go for accuracy, not speed.`, `<a href="${LI}${h.links[0][1]}" target="_blank" rel="noopener">Open on Lichess</a>`],
     [15, 'Fix your own blunders here', `Replay your "${C.CATS[key].label.toLowerCase()}" positions until the right move feels obvious.`, `<a href="#train" data-go="pz:${key}">Open the positions</a>`],
-    [10, clockW ? 'Speed work, twice as important for you' : 'Speed work', 'The speed drill here, or three runs of Puzzle Storm on Lichess.', `<a href="#train" data-go="dr">Speed drill</a> · <a href="${LI}/storm" target="_blank" rel="noopener">Puzzle Storm</a>`],
+    [10, clockW ? 'Speed work, twice as important for you' : 'Speed work', 'A few Rush runs here, or three runs of Puzzle Storm on Lichess.', `<a href="#train" data-go="dr">Rush</a> · <a href="${LI}/storm" target="_blank" rel="noopener">Puzzle Storm</a>`],
     [20, `Play ${esc(mainTc)} games with one rule`, `Today's rule: ${rule}`, st.p.platform === 'chesscom' ? `<a href="https://www.chess.com/play/online" target="_blank" rel="noopener">Play on Chess.com</a>` : `<a href="${LI}/" target="_blank" rel="noopener">Play on Lichess</a>`],
     [5, 'Review one loss', 'Open your latest loss in History and step through where it turned, or replay a blunder position against the ghost.', `<a href="#history">History</a> · <a href="#ghost">Play the ghost</a>`],
   ];

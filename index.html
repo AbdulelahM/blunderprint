@@ -277,6 +277,77 @@ dl.info .hide { color: var(--dim); font-weight: 700; font-style: italic; }
   .ghelo input { width: 110px; }
 }
 
+/* time control picker */
+.tcA { flex-basis: 100%; order: 6; display: flex; gap: 18px; flex-wrap: wrap; }
+#pl-bot-opts, #pl-gh-opts { flex-basis: 100%; order: 7; }
+.tg { display: grid; gap: 6px; }
+.tgl { font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.tgc { display: flex; gap: 6px; flex-wrap: wrap; }
+.tcb { display: flex; align-items: center; gap: 6px; background: var(--raise); border: 0; border-radius: 10px; padding: 8px 11px; color: #d6d4d0; font: inherit; font-weight: 800; cursor: pointer; }
+.tcb .dl { width: 16px; height: 16px; color: var(--c1, var(--line)); flex: none; }
+.tcb b { font-size: 16px; color: #fff; } .tcb span { font-size: 13px; color: var(--dim); }
+.tcb.on { background: var(--c1, var(--line)); color: #fff; box-shadow: 0 3px 0 var(--c2, rgba(0,0,0,.3)); }
+.tcb.on .dl { color: #fff; } .tcb.on span { color: rgba(255,255,255,.85); }
+/* captured pieces */
+.clocks .who { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+.clocks .who .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.caps { display: flex; align-items: center; gap: 6px; flex: none; }
+.caps .cg { display: flex; }
+.caps .cg svg { width: 22px; height: 22px; margin-right: -11px; filter: drop-shadow(0 1px 0 rgba(0,0,0,.35)); }
+.caps .cg svg:last-child { margin-right: 0; }
+.caps em { font-style: normal; font-size: 13px; font-weight: 900; color: var(--dim); margin-left: 2px; }
+/* board marks (right click) */
+.sq.mk { box-shadow: inset 0 0 0 200px rgba(235, 97, 80, .78); }
+.board svg.marks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
+/* rush */
+#dr-panel.run .navrow, #dr-panel.run .poslabel, #dr-panel.run .graph { display: none; }
+.rbest { font-size: 13px; color: var(--dim); font-weight: 800; } .rbest b { color: #f2c53a; }
+.rtimer { background: var(--panel); border-radius: 14px; padding: 14px 16px; display: grid; gap: 10px; }
+.rtimer .top { display: flex; align-items: baseline; justify-content: space-between; }
+.rtimer .t { font-size: 44px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+.rtimer .t.low { color: #f0503c; }
+.rtimer .sc { text-align: right; } .rtimer .sc b { font-size: 44px; font-weight: 900; line-height: 1; color: var(--line); }
+.rtimer .sc span { display: block; font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.rtimer .bar { display: block; height: 8px; background: var(--raise); border-radius: 99px; overflow: hidden; }
+#dr-fb:empty { display: none; }
+.rtimer .bar i { transition: none !important; display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #81b64c, #a3d160); border-radius: 99px; transform-origin: left; }
+.strikes { display: flex; gap: 8px; align-items: center; font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.strikes i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 15px; background: var(--raise); color: #55524e; }
+.strikes i.x { background: rgba(240,80,60,.18); color: #f0503c; }
+.rlog { display: flex; flex-wrap: wrap; gap: 6px; }
+.rlog span { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-weight: 900; font-size: 14px; }
+.rlog .ok { background: rgba(129,182,76,.18); color: #a3d160; } .rlog .no { background: rgba(240,80,60,.18); color: #f0503c; }
+.rsum { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 20px; align-items: start; }
+.rscore { background: linear-gradient(135deg, #3f5f2c, #2b4320); border-radius: 18px; padding: 26px; display: grid; justify-items: center; gap: 6px; }
+.rscore > b { font-size: 96px; font-weight: 900; line-height: 1; }
+.rscore .lb { font-size: 13px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.8); }
+.rscore .nb { background: #f2c53a; color: #302e2b; border-radius: 99px; padding: 4px 12px; font-weight: 900; font-size: 13px; }
+.rscore .ob { font-size: 13px; font-weight: 800; color: rgba(255,255,255,.75); }
+.rscore .st { display: flex; gap: 22px; margin-top: 10px; font-size: 13px; font-weight: 800; color: rgba(255,255,255,.8); text-align: center; }
+.rscore .st b { font-size: 20px; display: block; color: #fff; }
+.miss { display: grid; gap: 8px; }
+.mi { background: var(--panel); border-radius: 12px; display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 8px; }
+.mi .mb { width: 96px; height: 96px; border-radius: 6px; overflow: hidden; }
+.mi .mb .co { display: none; }
+.mi b { display: block; font-size: 15px; } .mi span { font-size: 13px; color: var(--dim); font-weight: 700; }
+.mi .mv { color: #f0503c; } .mi .bm { color: #a3d160; }
+.h2 { font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 4px 0 8px; }
+@media (max-width: 760px) {
+  .tcA { gap: 8px; } .tg { grid-template-columns: 62px 1fr; align-items: center; }
+  .tcb { padding: 5px 8px; gap: 4px; } .tcb b { font-size: 14px; } .tcb span { font-size: 12px; } .tcb .dl { width: 14px; height: 14px; }
+  #pl-pick { padding-bottom: 330px; }
+  .plbar .chips button { padding: 4px 10px; font-size: 13px; }
+  .caps .cg svg { width: 18px; height: 18px; margin-right: -9px; }
+  .rtimer .t, .rtimer .sc b { font-size: 32px; }
+  .rsum { grid-template-columns: 1fr; }
+  #dr-play .side { display: contents; }
+  #dr-head { order: -1; padding: 10px 14px; gap: 8px; }
+  #dr-play { display: flex; flex-direction: column; gap: 12px; }
+  #dr-play > *, #dr-play .boardcol, #dr-head { width: 100%; box-sizing: border-box; }
+  .rscore > b { font-size: 72px; }
+  .mi { grid-template-columns: 72px minmax(0, 1fr); } .mi .mb { width: 72px; height: 72px; } .mi .btn { grid-column: 1 / -1; }
+}
+
 /* history */
 .hfilters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
 .glist { display: grid; gap: 6px; }
@@ -292,7 +363,7 @@ dl.info .hide { color: var(--dim); font-weight: 700; font-style: italic; }
 .grow-row .acc span { display: block; font-size: 12px; color: var(--dim); font-weight: 700; }
 .grow-row .bl { text-align: right; min-width: 64px; font-size: 13px; color: var(--dim); font-weight: 700; }
 .grow-row .bl b { color: var(--blunder); font-size: 16px; }
-.cdot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: 0; margin-right: 6px; border: 1px solid #77746f; }
+.cdot { display: inline-block; flex: none; width: 10px; height: 10px; min-width: 10px; border-radius: 50%; vertical-align: 0; margin-right: 6px; border: 1px solid #77746f; box-sizing: border-box; }
 .cdot.w { background: #fff; } .cdot.b { background: #1a1917; }
 .gvhead { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .gvhead .t { flex: 1; min-width: 200px; }
@@ -654,10 +725,11 @@ https://github.com/shaack/cm-chessboard
   <!-- ============ TRAIN ============ -->
   <section class="view" id="view-train">
     <div class="trainbar">
-      <div class="seg" role="tablist" aria-label="Training mode"><button type="button" data-mode="pz" class="on" role="tab">Mistakes</button><button type="button" data-mode="dr" role="tab">Speed</button></div>
+      <div class="seg" role="tablist" aria-label="Training mode"><button type="button" data-mode="pz" class="on" role="tab">Mistakes</button><button type="button" data-mode="dr" role="tab">Rush</button></div>
       <span class="grow"></span>
       <div class="seg" id="pz-order" aria-label="Order"><button type="button" data-o="new" class="on">Newest<span class="lg"> games</span></button><button type="button" data-o="rand">Random</button></div>
       <select class="inline" id="pz-filter" aria-label="Mistake type"></select>
+      <span class="rbest" id="dr-best" hidden></span>
     </div>
 
     <div id="pz-panel">
@@ -679,17 +751,22 @@ https://github.com/shaack/cm-chessboard
     </div>
 
     <div id="dr-panel" hidden>
-      <div class="trainer">
-        <div class="boardcol"><div class="timer" id="dr-timer"><i></i></div><div id="dr-stage"></div></div>
+      <div class="trainer" id="dr-play">
+        <div class="boardcol"><div id="dr-stage"></div></div>
         <div class="side">
-          <div class="ask" id="dr-ask">A good move, fast<small>Your own positions. Any solid move passes. Three in a row and the timer shrinks.</small></div>
-          <div class="bigclock" id="dr-clock">10.0s</div>
-          <div class="fb" id="dr-fb">Press Start when you are ready.</div>
-          <div class="btns"><button class="btn primary" id="dr-start" type="button">Start</button><button class="btn quiet" id="dr-stop" type="button">Stop</button></div>
-          <div class="count" id="dr-count"></div>
+          <div class="rtimer" id="dr-head">
+            <div class="top"><span class="t" id="dr-clock">3:00</span><span class="sc"><b id="dr-score">0</b><span>solved</span></span></div>
+            <div class="bar" id="dr-timer"><i></i></div>
+            <div class="strikes" id="dr-strikes">Strikes <i>✕</i><i>✕</i><i>✕</i></div>
+          </div>
+          <div class="ask" id="dr-ask">Rush<small>3 minutes. Solve as many of your own positions as you can. Any solid move counts. Three wrong moves and the run is over.</small></div>
+          <div class="fb" id="dr-fb"></div>
+          <div class="rlog" id="dr-log"></div>
+          <div class="btns"><button class="btn primary" id="dr-start" type="button">Start</button><button class="btn quiet" id="dr-stop" type="button" hidden>End run</button></div>
           <dl class="info" id="dr-info" hidden></dl>
         </div>
       </div>
+      <div class="rsum" id="dr-sum" hidden></div>
     </div>
   </section>
 
@@ -702,7 +779,6 @@ https://github.com/shaack/cm-chessboard
       <div class="plbar" id="pl-bar">
         <span class="vs" id="pl-vs"></span>
         <div class="plopts" id="pl-bot-opts">
-          <div class="chips" id="pl-tc" aria-label="Time control"><button type="button" data-v="180">3+0</button><button type="button" data-v="300">5+0</button><button type="button" data-v="600">10+0</button><button type="button" data-v="0">No clock</button></div>
           <div class="chips" id="pl-col" aria-label="Your colour"><button type="button" data-v="r">Random colour</button><button type="button" data-v="w">White</button><button type="button" data-v="b">Black</button></div>
         </div>
         <div class="plopts" id="pl-gh-opts" hidden>
@@ -712,10 +788,10 @@ https://github.com/shaack/cm-chessboard
             <option value="b">From move one, I play Black</option>
           </select>
           <label class="ghelo">Strength <b id="gh-elo-val">1400</b><input type="range" id="gh-elo" min="800" max="2400" step="50" value="1400"></label>
-          <label class="ghclk"><input type="checkbox" id="gh-clock" checked> Clock</label>
         </div>
         <span class="grow"></span>
         <button class="btn primary big" id="pl-go" type="button">Play</button>
+        <div class="tcA" id="pl-tc" aria-label="Time control"></div>
       </div>
     </div>
     <div id="pl-game" hidden>
@@ -725,9 +801,9 @@ https://github.com/shaack/cm-chessboard
       </div>
       <div class="trainer">
         <div class="boardcol">
-          <div class="clocks"><span class="who" id="gh-top-name">Ghost</span><span class="clk" id="gh-top-clk">3:00</span></div>
+          <div class="clocks"><span class="who"><span class="nm" id="gh-top-name">Ghost</span><span class="caps" id="gh-top-caps"></span></span><span class="clk" id="gh-top-clk">3:00</span></div>
           <div id="gh-stage"></div>
-          <div class="clocks"><span class="who" id="gh-bot-name">You</span><span class="clk" id="gh-bot-clk">3:00</span></div>
+          <div class="clocks"><span class="who"><span class="nm" id="gh-bot-name">You</span><span class="caps" id="gh-bot-caps"></span></span><span class="clk" id="gh-bot-clk">3:00</span></div>
         </div>
         <div class="side">
           <div class="btns">
